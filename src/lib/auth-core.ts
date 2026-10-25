@@ -10,6 +10,7 @@ export interface AuthUser {
   id: number;
   username: string;
   isAdmin: boolean;
+  isCoach: boolean;
 }
 
 export const SESSION_DAYS = 30;
@@ -76,7 +77,7 @@ export async function createSessionRecord(userId: number, c?: Queryable): Promis
 export async function findSessionUser(token: string): Promise<AuthUser | null> {
   if (!token || token.length > 200) return null;
   return q1<AuthUser>(
-    `SELECT u.id, u.username, u.is_admin AS "isAdmin"
+    `SELECT u.id, u.username, u.is_admin AS "isAdmin", u.is_coach AS "isCoach"
      FROM auth_sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1 AND s.expires_at > now()`,
     [sha256(token)],

@@ -125,6 +125,19 @@ export function XpChart({ data, by }: { data: { period: string; xp: number }[]; 
   );
 }
 
+export function SparkChart({ data }: { data: { period: string; value: number }[] }) {
+  if (data.length < 2) return null;
+  return (
+    <div style={{ height: 36, width: '100%', minWidth: 80 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+          <Line type="monotone" dataKey="value" stroke="#a78bfa" strokeWidth={1.5} dot={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export function ExercisePicker({
   base,
   value,

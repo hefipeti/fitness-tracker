@@ -42,7 +42,10 @@ export default async function PlansPage() {
             </div>
             {p.notes && <p className="small dim mt-s">{p.notes}</p>}
             <div className="row wrap mt">
-              <Link className="btn primary sm" href={`/plans/${p.id}`}>
+              <Link className="btn primary sm" href={`/plans/${p.id}/view`}>
+                View
+              </Link>
+              <Link className="btn sm ghost" href={`/plans/${p.id}`}>
                 Edit
               </Link>
               {!p.active && (

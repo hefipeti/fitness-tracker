@@ -1,4 +1,5 @@
 import { q, q1 } from './db';
+import { hashToken } from './share-tokens';
 import { getAggregate, totalXp } from './engine';
 import {
   ACHIEVEMENTS,
@@ -576,5 +577,184 @@ export function getXpSeries(uid: number, since: string, by: GroupBy): Promise<{ 
     `SELECT date_trunc('${TRUNC[by]}', event_date)::date AS period, sum(xp)::int AS xp
      FROM xp_events WHERE user_id = $1 AND event_date >= $2 GROUP BY 1 ORDER BY 1`,
     [uid, since],
+  );
+}
+
+// ---------- Share tokens ----------
+
+export interface ShareRow {
+  id: number;
+  planId: number;
+  shareType: 'view' | 'review';
+  includePersonalData: boolean;
+  createdAt: string;
+}
+
+export interface ShareLookup {
+  shareId: number;
+  planId: number;
+  userId: number;
+  includePersonalData: boolean;
+  shareType: 'view' | 'review';
+}
+
+export async function lookupShare(token: string): Promise<ShareLookup | null> {
+  const row = await q1<{ shareId: number; planId: number; userId: number; includePersonal: boolean; shareType: string }>(
+    `SELECT id AS "shareId", plan_id AS "planId", user_id AS "userId",
+            include_personal AS "includePersonal", share_type AS "shareType"
+     FROM plan_shares WHERE token_hash = $1`,
+    [hashToken(token)],
+  );
+  if (!row) return null;
+  return {
+    shareId: row.shareId,
+    planId: row.planId,
+    userId: row.userId,
+    includePersonalData: row.includePersonal,
+    shareType: row.shareType as 'view' | 'review',
+  };
+}
+
+export function listSharesForPlan(userId: number, planId: number): Promise<ShareRow[]> {
+  return q<ShareRow>(
+    `SELECT id, plan_id AS "planId", share_type AS "shareType",
+            include_personal AS "includePersonalData", created_at AS "createdAt"
+     FROM plan_shares WHERE user_id = $1 AND plan_id = $2 ORDER BY created_at DESC`,
+    [userId, planId],
+  );
+}
+
+export interface PlanViewResult {
+  shareId: number;
+  planOwnerId: number;
+  plan: PlanFull;
+  includePersonalData: boolean;
+  shareType: 'view' | 'review';
+}
+
+export async function getPlanForViewer(token: string): Promise<PlanViewResult | null> {
+  const share = await lookupShare(token);
+  if (!share) return null;
+  const plan = await getPlan(share.userId, share.planId);
+  if (!plan) return null;
+  return { shareId: share.shareId, planOwnerId: share.userId, plan, includePersonalData: share.includePersonalData, shareType: share.shareType };
+}
+
+// ---------- Plan performance ----------
+
+export interface ExerciseLastAttempt {
+  exerciseId: number;
+  lastDate: string;
+  lastSets: number;
+  lastReps: number | null;
+  lastSeconds: number | null;
+  lastWeightKg: number | null;
+}
+
+export async function getLastAttemptsForPlan(uid: number, planId: number): Promise<ExerciseLastAttempt[]> {
+  const exerciseIds = (
+    await q<{ id: number }>(
+      `SELECT DISTINCT pe.exercise_id AS id FROM plan_exercises pe
+       JOIN plan_days pd ON pd.id = pe.plan_day_id WHERE pd.plan_id = $1`,
+      [planId],
+    )
+  ).map((r) => r.id);
+  if (!exerciseIds.length) return [];
+  return q<ExerciseLastAttempt>(
+    `WITH last_sessions AS (
+       SELECT DISTINCT ON (ss.exercise_id)
+         ss.exercise_id, ss.session_id, se.session_date
+       FROM session_sets ss
+       JOIN sessions se ON se.id = ss.session_id AND se.completed_at IS NOT NULL AND se.user_id = $1
+       WHERE ss.exercise_id = ANY($2::int[])
+       ORDER BY ss.exercise_id, se.session_date DESC, se.id DESC
+     )
+     SELECT ls.exercise_id AS "exerciseId", ls.session_date AS "lastDate",
+            count(DISTINCT ss.set_no)::int AS "lastSets",
+            max(ss.reps) AS "lastReps",
+            max(ss.seconds) AS "lastSeconds",
+            max(ss.weight_kg) AS "lastWeightKg"
+     FROM last_sessions ls
+     JOIN session_sets ss ON ss.session_id = ls.session_id AND ss.exercise_id = ls.exercise_id
+     GROUP BY ls.exercise_id, ls.session_date`,
+    [uid, exerciseIds],
+  );
+}
+
+export interface ExerciseTrendPoint {
+  exerciseId: number;
+  period: string;
+  value: number;
+}
+
+export async function getExerciseTrendsForPlan(uid: number, planId: number, since: string): Promise<ExerciseTrendPoint[]> {
+  return q<ExerciseTrendPoint>(
+    `SELECT s.exercise_id AS "exerciseId",
+            date_trunc('week', se.session_date)::date AS period,
+            round(CASE ex.mode
+              WHEN 'weighted' THEN max(ss.weight_kg * (1 + ss.reps / 30.0))
+              WHEN 'assisted' THEN min(ss.weight_kg) FILTER (WHERE ss.reps >= 5)
+              WHEN 'seconds'  THEN max(ss.seconds)
+              ELSE max(ss.reps)
+            END::numeric, 1) AS value
+     FROM (SELECT DISTINCT pe.exercise_id
+           FROM plan_exercises pe JOIN plan_days pd ON pd.id = pe.plan_day_id WHERE pd.plan_id = $2) s
+     JOIN session_sets ss ON ss.exercise_id = s.exercise_id
+     JOIN sessions se ON se.id = ss.session_id AND se.completed_at IS NOT NULL
+                     AND se.user_id = $1 AND se.session_date >= $3
+     JOIN exercises ex ON ex.id = s.exercise_id
+     GROUP BY s.exercise_id, period
+     HAVING CASE ex.mode
+       WHEN 'weighted' THEN max(ss.weight_kg * (1 + ss.reps / 30.0))
+       WHEN 'assisted' THEN min(ss.weight_kg) FILTER (WHERE ss.reps >= 5)
+       WHEN 'seconds'  THEN max(ss.seconds)
+       ELSE max(ss.reps)
+     END IS NOT NULL
+     ORDER BY s.exercise_id, period`,
+    [uid, planId, since],
+  );
+}
+
+// ---------- Achievements ----------
+
+export interface UnlockedAchievement {
+  key: string;
+  name: string;
+  desc: string;
+  xp: number;
+  unlockedAt: string;
+}
+
+export async function getUnlockedAchievements(uid: number): Promise<UnlockedAchievement[]> {
+  const rows = await q<{ key: string; unlockedAt: string }>(
+    `SELECT key, unlocked_at AS "unlockedAt" FROM achievements WHERE user_id = $1 ORDER BY unlocked_at DESC`,
+    [uid],
+  );
+  const { ACHIEVEMENTS } = await import('./game');
+  return rows.flatMap((r) => {
+    const def = ACHIEVEMENTS.find((a) => a.key === r.key);
+    if (!def) return [];
+    return [{ key: r.key, name: def.name, desc: def.desc, xp: def.xp, unlockedAt: r.unlockedAt }];
+  });
+}
+
+// ---------- Share comments ----------
+
+export interface ShareComment {
+  id: number;
+  planExerciseId: number;
+  commenterName: string | null;
+  body: string;
+  createdAt: string;
+}
+
+export function listCommentsForShare(shareId: number): Promise<ShareComment[]> {
+  return q<ShareComment>(
+    `SELECT sc.id, sc.plan_exercise_id AS "planExerciseId",
+            u.username AS "commenterName", sc.body, sc.created_at AS "createdAt"
+     FROM share_comments sc
+     LEFT JOIN users u ON u.id = sc.commenter_id
+     WHERE sc.share_id = $1 ORDER BY sc.created_at`,
+    [shareId],
   );
 }

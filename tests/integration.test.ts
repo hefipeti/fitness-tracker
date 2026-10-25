@@ -97,7 +97,7 @@ describe.skipIf(!url)('database integration', () => {
   it('migrations are idempotent and leave pre-account data unowned', async () => {
     const { runMigrations } = await import('@/lib/migrations');
     await runMigrations();
-    expect((await db.q('SELECT 1 FROM schema_migrations')).length).toBe(4);
+    expect((await db.q('SELECT 1 FROM schema_migrations')).length).toBe(6);
     expect((await db.q('SELECT 1 FROM plans WHERE user_id IS NULL')).length).toBe(1); // starter plan from migration 2
     expect((await db.q('SELECT 1 FROM foods WHERE user_id IS NULL')).length).toBe(8);
     expect((await db.q('SELECT 1 FROM exercises WHERE slug = $1', ['assisted-pull-up-machine'])).length).toBe(1);
@@ -563,5 +563,51 @@ describe.skipIf(!url)('database integration', () => {
     asUser(partner, false);
     expect(await profile.resetPasswordAction(fd({ userId: peti, password: 'takeover attempt' }))).toMatchObject({ error: expect.stringMatching(/administrator/i) });
     expect(await profile.resetPasswordAction(fd({ userId: 99999, password: 'does not matter 1' }))).toMatchObject({ error: expect.any(String) });
+  });
+
+  // ---------------------------------------------------------------- share tokens
+
+  it('plan share: createShare returns a token, lookupShare resolves it', async () => {
+    asUser(peti);
+    const shareTokens = await import('@/lib/share-tokens');
+    const shareQueries = await import('@/lib/queries');
+    const allPlans = await queries.listPlans(peti);
+    const planId = allPlans[0].id;
+    const { token, shareId } = await shareTokens.createShare(peti, planId, false);
+    expect(token).toMatch(/^[A-Za-z0-9_-]+$/);
+    const result = await shareQueries.lookupShare(token);
+    expect(result).not.toBeNull();
+    expect(result!.planId).toBe(planId);
+    expect(result!.userId).toBe(peti);
+    expect(result!.includePersonalData).toBe(false);
+    const shares = await shareQueries.listSharesForPlan(peti, planId);
+    expect(shares.some((s) => s.id === shareId)).toBe(true);
+  });
+
+  it('plan share: revokeShare removes access; other owners cannot revoke', async () => {
+    asUser(peti);
+    const shareTokens = await import('@/lib/share-tokens');
+    const shareQueries = await import('@/lib/queries');
+    const allPlans = await queries.listPlans(peti);
+    const planId = allPlans[0].id;
+    const { token, shareId } = await shareTokens.createShare(peti, planId, false);
+    await shareTokens.revokeShare(partner, shareId);
+    expect(await shareQueries.lookupShare(token)).not.toBeNull();
+    await shareTokens.revokeShare(peti, shareId);
+    expect(await shareQueries.lookupShare(token)).toBeNull();
+  });
+
+  it('plan share: getPlanForViewer returns plan for valid token, null for invalid', async () => {
+    asUser(peti);
+    const shareTokens = await import('@/lib/share-tokens');
+    const shareQueries = await import('@/lib/queries');
+    const allPlans = await queries.listPlans(peti);
+    const planId = allPlans[0].id;
+    const { token } = await shareTokens.createShare(peti, planId, true);
+    const result = await shareQueries.getPlanForViewer(token);
+    expect(result).not.toBeNull();
+    expect(result!.plan.id).toBe(planId);
+    expect(result!.includePersonalData).toBe(true);
+    expect(await shareQueries.getPlanForViewer('bogus-token-xyz')).toBeNull();
   });
 });

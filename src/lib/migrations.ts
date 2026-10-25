@@ -280,11 +280,40 @@ async function addPlanExercises(c: PoolClient): Promise<void> {
   }
 }
 
+const PLAN_SHARES = `
+CREATE TABLE plan_shares (
+  id                SERIAL PRIMARY KEY,
+  user_id           INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_id           INT NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+  token_hash        TEXT NOT NULL UNIQUE,
+  include_personal  BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX plan_shares_user_plan ON plan_shares (user_id, plan_id);
+`;
+
+const SHARE_V2 = `
+ALTER TABLE plan_shares ADD COLUMN share_type TEXT NOT NULL DEFAULT 'view'
+  CHECK (share_type IN ('view','review'));
+ALTER TABLE users ADD COLUMN is_coach BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE TABLE share_comments (
+  id               SERIAL PRIMARY KEY,
+  share_id         INT NOT NULL REFERENCES plan_shares(id) ON DELETE CASCADE,
+  plan_exercise_id INT NOT NULL REFERENCES plan_exercises(id) ON DELETE CASCADE,
+  commenter_id     INT REFERENCES users(id) ON DELETE SET NULL,
+  body             TEXT NOT NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX share_comments_share ON share_comments (share_id);
+`;
+
 const MIGRATIONS: Migration[] = [
   { id: 1, name: 'initial schema', up: async (c) => void (await c.query(SCHEMA)) },
   { id: 2, name: 'seed exercises, starter plan, foods', up: seed },
   { id: 3, name: 'accounts and per-user data', up: async (c) => void (await c.query(ACCOUNTS)) },
   { id: 4, name: 'assisted/mobility exercises for the 12-week plan', up: addPlanExercises },
+  { id: 5, name: 'plan share tokens', up: async (c) => void (await c.query(PLAN_SHARES)) },
+  { id: 6, name: 'review links, coach flag, exercise comments', up: async (c) => void (await c.query(SHARE_V2)) },
 ];
 
 export async function runMigrations(): Promise<void> {
