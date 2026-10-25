@@ -15,7 +15,7 @@ services:
       - fitness_pgdata:/var/lib/postgresql/data
     ports:
       # Loopback only (for pgAdmin/DBeaver on this PC). Never exposed to the network.
-      - "127.0.0.1:${DB_PORT:-5432}:5432"
+      - "127.0.0.1:${DB_PORT:-5455}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fitness} -d ${POSTGRES_DB:-fitness}"]
       interval: 5s
@@ -37,7 +37,7 @@ services:
     ports:
       # Reachable from this PC and from your phone on the same Wi-Fi.
       # To keep it PC-only, change to "127.0.0.1:${APP_PORT:-3000}:3000".
-      - "${APP_PORT:-3000}:3000"
+      - "${APP_PORT:-3005}:3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/login >/dev/null || exit 1"]
       interval: 15s
