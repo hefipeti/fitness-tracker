@@ -1,0 +1,49 @@
+name: fitness-tracker
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fitness}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fitness_local_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-fitness}
+      TZ: ${APP_TZ:-Europe/Budapest}
+    volumes:
+      # Named volume: your data survives `docker compose down` and rebuilds.
+      # Only `docker compose down -v` deletes it.
+      - fitness_pgdata:/var/lib/postgresql/data
+    ports:
+      # Loopback only (for pgAdmin/DBeaver on this PC). Never exposed to the network.
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fitness} -d ${POSTGRES_DB:-fitness}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-fitness}:${POSTGRES_PASSWORD:-fitness_local_pw}@db:5432/${POSTGRES_DB:-fitness}
+      APP_TZ: ${APP_TZ:-Europe/Budapest}
+      TZ: ${APP_TZ:-Europe/Budapest}
+      # Plain HTTP on the home network. Set to "true" only if you put HTTPS in front of the app.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    ports:
+      # Reachable from this PC and from your phone on the same Wi-Fi.
+      # To keep it PC-only, change to "127.0.0.1:${APP_PORT:-3000}:3000".
+      - "${APP_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/login >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  fitness_pgdata:
