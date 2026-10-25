@@ -758,3 +758,117 @@ export function listCommentsForShare(shareId: number): Promise<ShareComment[]> {
     [shareId],
   );
 }
+
+// ---------- Nutrition plans ----------
+
+export interface NutritionPlanSummary {
+  id: number;
+  name: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface PrepFood {
+  id: number;
+  foodId: number;
+  name: string;
+  servingLabel: string;
+  servings: number;
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+export interface PrepSession {
+  id: number;
+  name: string;
+  cookWeekday: number;
+  notes: string;
+  foods: PrepFood[];
+}
+
+export interface DayMeal {
+  id: number;
+  weekday: number;
+  meal: Meal;
+  foodId: number;
+  foodName: string;
+  servingLabel: string;
+  servings: number;
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  prepSessionId: number | null;
+}
+
+export interface NutritionPlanFull extends NutritionPlanSummary {
+  prepSessions: PrepSession[];
+  dayMeals: DayMeal[];
+}
+
+export function listNutritionPlans(uid: number): Promise<NutritionPlanSummary[]> {
+  return q<NutritionPlanSummary>(
+    `SELECT id, name, active, created_at AS "createdAt" FROM nutrition_plans WHERE user_id = $1 ORDER BY created_at`,
+    [uid],
+  );
+}
+
+export async function getNutritionPlan(uid: number, planId: number): Promise<NutritionPlanFull | null> {
+  const plan = await q1<NutritionPlanSummary>(
+    `SELECT id, name, active, created_at AS "createdAt" FROM nutrition_plans WHERE id = $1 AND user_id = $2`,
+    [planId, uid],
+  );
+  if (!plan) return null;
+
+  const [sessions, prepFoodsRaw, dayMeals] = await Promise.all([
+    q<Omit<PrepSession, 'foods'>>(
+      `SELECT id, name, cook_weekday AS "cookWeekday", notes
+       FROM nutrition_plan_prep_sessions WHERE plan_id = $1 ORDER BY id`,
+      [planId],
+    ),
+    q<PrepFood & { prepSessionId: number }>(
+      `SELECT pf.id, pf.prep_session_id AS "prepSessionId", pf.food_id AS "foodId",
+              f.name, f.serving_label AS "servingLabel",
+              pf.servings::float AS servings,
+              f.kcal::float AS kcal, f.protein::float AS protein, f.carbs::float AS carbs, f.fat::float AS fat
+       FROM nutrition_plan_prep_foods pf
+       JOIN foods f ON f.id = pf.food_id
+       JOIN nutrition_plan_prep_sessions s ON s.id = pf.prep_session_id
+       WHERE s.plan_id = $1 ORDER BY pf.id`,
+      [planId],
+    ),
+    q<DayMeal>(
+      `SELECT dm.id, dm.weekday, dm.meal, dm.food_id AS "foodId", f.name AS "foodName",
+              f.serving_label AS "servingLabel", dm.servings::float AS servings,
+              dm.prep_session_id AS "prepSessionId",
+              round((f.kcal * dm.servings)::numeric, 1)::float AS kcal,
+              round((f.protein * dm.servings)::numeric, 1)::float AS protein,
+              round((f.carbs * dm.servings)::numeric, 1)::float AS carbs,
+              round((f.fat * dm.servings)::numeric, 1)::float AS fat
+       FROM nutrition_plan_day_meals dm
+       JOIN foods f ON f.id = dm.food_id
+       WHERE dm.plan_id = $1 ORDER BY dm.weekday, dm.meal`,
+      [planId],
+    ),
+  ]);
+
+  const foodsBySession = new Map<number, PrepFood[]>();
+  for (const f of prepFoodsRaw) {
+    if (!foodsBySession.has(f.prepSessionId)) foodsBySession.set(f.prepSessionId, []);
+    foodsBySession.get(f.prepSessionId)!.push(f);
+  }
+
+  return {
+    ...plan,
+    prepSessions: sessions.map((s) => ({ ...s, foods: foodsBySession.get(s.id) ?? [] })),
+    dayMeals,
+  };
+}
+
+export async function getActiveNutritionPlan(uid: number): Promise<NutritionPlanFull | null> {
+  const row = await q1<{ id: number }>('SELECT id FROM nutrition_plans WHERE user_id = $1 AND active = TRUE', [uid]);
+  if (!row) return null;
+  return getNutritionPlan(uid, row.id);
+}

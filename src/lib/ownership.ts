@@ -46,3 +46,28 @@ export async function assertExerciseVisible(uid: number, exerciseId: number, c?:
   );
   if (!row) throw new UserError('Exercise not found');
 }
+
+export async function assertFoodVisible(uid: number, foodId: number, c?: Queryable): Promise<void> {
+  const row = await q1(
+    'SELECT 1 FROM foods WHERE id = $1 AND (user_id IS NULL OR user_id = $2)',
+    [foodId, uid],
+    c,
+  );
+  if (!row) throw new UserError('Food not found');
+}
+
+export async function assertNutritionPlan(uid: number, planId: number, c?: Queryable): Promise<void> {
+  if (!(await q1('SELECT 1 FROM nutrition_plans WHERE id = $1 AND user_id = $2', [planId, uid], c)))
+    throw new UserError('Nutrition plan not found');
+}
+
+export async function assertPrepSession(uid: number, sessionId: number, c?: Queryable): Promise<void> {
+  const row = await q1(
+    `SELECT 1 FROM nutrition_plan_prep_sessions s
+     JOIN nutrition_plans p ON p.id = s.plan_id
+     WHERE s.id = $1 AND p.user_id = $2`,
+    [sessionId, uid],
+    c,
+  );
+  if (!row) throw new UserError('Prep session not found');
+}

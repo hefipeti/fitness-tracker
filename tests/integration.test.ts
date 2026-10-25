@@ -53,6 +53,7 @@ describe.skipIf(!url)('database integration', () => {
   let tasks: typeof import('@/lib/actions/tasks');
   let food: typeof import('@/lib/actions/food');
   let plans: typeof import('@/lib/actions/plans');
+  let nutritionPlans: typeof import('@/lib/actions/nutrition-plans');
   let profile: typeof import('@/lib/actions/profile');
   let queries: typeof import('@/lib/queries');
   let users: typeof import('@/lib/users');
@@ -81,6 +82,7 @@ describe.skipIf(!url)('database integration', () => {
     tasks = await import('@/lib/actions/tasks');
     food = await import('@/lib/actions/food');
     plans = await import('@/lib/actions/plans');
+    nutritionPlans = await import('@/lib/actions/nutrition-plans');
     profile = await import('@/lib/actions/profile');
     queries = await import('@/lib/queries');
     users = await import('@/lib/users');
@@ -97,7 +99,7 @@ describe.skipIf(!url)('database integration', () => {
   it('migrations are idempotent and leave pre-account data unowned', async () => {
     const { runMigrations } = await import('@/lib/migrations');
     await runMigrations();
-    expect((await db.q('SELECT 1 FROM schema_migrations')).length).toBe(6);
+    expect((await db.q('SELECT 1 FROM schema_migrations')).length).toBe(7);
     expect((await db.q('SELECT 1 FROM plans WHERE user_id IS NULL')).length).toBe(1); // starter plan from migration 2
     expect((await db.q('SELECT 1 FROM foods WHERE user_id IS NULL')).length).toBe(8);
     expect((await db.q('SELECT 1 FROM exercises WHERE slug = $1', ['assisted-pull-up-machine'])).length).toBe(1);
@@ -609,5 +611,89 @@ describe.skipIf(!url)('database integration', () => {
     expect(result!.plan.id).toBe(planId);
     expect(result!.includePersonalData).toBe(true);
     expect(await shareQueries.getPlanForViewer('bogus-token-xyz')).toBeNull();
+  });
+
+  // ---------------------------------------------------------------- nutrition plans
+
+  it('nutrition plans: create and list', async () => {
+    asUser(peti);
+    await nutritionPlans.createNutritionPlanAction(fd({ name: 'Bulk Phase Meals' }));
+    const list = await queries.listNutritionPlans(peti);
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ name: 'Bulk Phase Meals', active: false });
+  });
+
+  it('nutrition plans: activating a plan deactivates the others', async () => {
+    asUser(peti);
+    await nutritionPlans.createNutritionPlanAction(fd({ name: 'Cut Phase Meals' }));
+    const [plan1, plan2] = await queries.listNutritionPlans(peti);
+    await nutritionPlans.activateNutritionPlanAction(fd({ id: String(plan1.id) }));
+    const after = await queries.listNutritionPlans(peti);
+    expect(after.find((p) => p.id === plan1.id)!.active).toBe(true);
+    expect(after.find((p) => p.id === plan2.id)!.active).toBe(false);
+  });
+
+  it('nutrition plans: add prep session with foods', async () => {
+    asUser(peti);
+    const [plan] = await queries.listNutritionPlans(peti);
+    const chickenId = (await db.q1<{ id: number }>('SELECT id FROM foods WHERE user_id = $1 LIMIT 1', [peti]))!.id;
+    await nutritionPlans.createPrepSessionAction(fd({ planId: String(plan.id), name: 'Sunday Batch', cookWeekday: '7', notes: 'Prep for the week' }));
+    const full = await queries.getNutritionPlan(peti, plan.id);
+    expect(full!.prepSessions).toHaveLength(1);
+    expect(full!.prepSessions[0]).toMatchObject({ name: 'Sunday Batch', cookWeekday: 7 });
+
+    await nutritionPlans.addPrepFoodAction(fd({ prepSessionId: String(full!.prepSessions[0].id), foodId: String(chickenId), servings: '3' }));
+    const updated = await queries.getNutritionPlan(peti, plan.id);
+    expect(updated!.prepSessions[0].foods).toHaveLength(1);
+    expect(updated!.prepSessions[0].foods[0].servings).toBe(3);
+  });
+
+  it('nutrition plans: add prep-linked and standalone planned meals', async () => {
+    asUser(peti);
+    const [plan] = await queries.listNutritionPlans(peti);
+    const full = await queries.getNutritionPlan(peti, plan.id);
+    const sessionId = full!.prepSessions[0].id;
+    const foodId = full!.prepSessions[0].foods[0].foodId;
+
+    // prep-linked meal: Monday lunch from Sunday's batch
+    await nutritionPlans.addPlannedMealAction(fd({ planId: String(plan.id), weekday: '1', meal: 'lunch', foodId: String(foodId), servings: '1', prepSessionId: String(sessionId) }));
+    // standalone meal: Wednesday breakfast
+    await nutritionPlans.addPlannedMealAction(fd({ planId: String(plan.id), weekday: '3', meal: 'breakfast', foodId: String(foodId), servings: '2' }));
+
+    const updated = await queries.getNutritionPlan(peti, plan.id);
+    const mondayLunch = updated!.dayMeals.find((m) => m.weekday === 1 && m.meal === 'lunch')!;
+    expect(mondayLunch).toMatchObject({ servings: 1, prepSessionId: sessionId });
+    const wedBreakfast = updated!.dayMeals.find((m) => m.weekday === 3 && m.meal === 'breakfast')!;
+    expect(wedBreakfast).toMatchObject({ servings: 2, prepSessionId: null });
+  });
+
+  it('nutrition plans: owner cannot be spoofed — partner cannot mutate petiʼs plan', async () => {
+    asUser(partner);
+    const [petiPlan] = await queries.listNutritionPlans(peti);
+    const result = await nutritionPlans.activateNutritionPlanAction(fd({ id: String(petiPlan.id) }));
+    expect(result).toMatchObject({ error: expect.any(String) });
+    // plan stays inactive for peti
+    asUser(peti);
+    const list = await queries.listNutritionPlans(peti);
+    expect(list.find((p) => p.id === petiPlan.id)!.active).toBe(true); // was activated in prev test
+  });
+
+  it('nutrition plans: import plan day appends meals to food log', async () => {
+    asUser(peti);
+    const [plan] = await queries.listNutritionPlans(peti);
+    await nutritionPlans.activateNutritionPlanAction(fd({ id: String(plan.id) }));
+    const testDate = '2026-11-02'; // a Monday (weekday 1)
+    const result = await nutritionPlans.importPlanDayAction(fd({ date: testDate, mode: 'append' }));
+    expect(result).not.toMatchObject({ error: expect.any(String) });
+    const logs = await db.q('SELECT meal, servings FROM food_logs WHERE user_id = $1 AND log_date = $2', [peti, testDate]);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ meal: 'lunch' });
+  });
+
+  it('nutrition plans: import plan day with existing logs returns conflict when mode is missing', async () => {
+    asUser(peti);
+    const testDate = '2026-11-02'; // already has logs from previous test
+    const result = await nutritionPlans.importPlanDayAction(fd({ date: testDate }));
+    expect(result).toMatchObject({ conflict: true });
   });
 });
