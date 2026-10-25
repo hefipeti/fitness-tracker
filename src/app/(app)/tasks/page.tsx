@@ -1,6 +1,7 @@
 import { requireUser } from '@/lib/auth';
 import { PageHead, Panel } from '@/components/ui';
 import { RunForm, TaskCheck } from '@/components/system';
+import { SearchableSelect } from '@/components/searchable-select';
 import { listDoneTasks, listOpenTasks, type Task } from '@/lib/queries';
 import { formatDay, todayStr } from '@/lib/dates';
 import { createTaskAction, deleteTaskAction, toggleTaskAction } from '@/lib/actions/tasks';
@@ -93,20 +94,28 @@ export default async function TasksPage() {
               </label>
               <label className="field">
                 Repeat
-                <select name="repeat" defaultValue="none">
-                  <option value="none">Once</option>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                </select>
+                <SearchableSelect
+                  name="repeat"
+                  defaultValue="none"
+                  options={[
+                    { value: 'none', label: 'Once' },
+                    { value: 'daily', label: 'Daily' },
+                    { value: 'weekly', label: 'Weekly' },
+                  ]}
+                />
               </label>
               <label className="field">
                 Reward
-                <select name="xp" defaultValue="20">
-                  <option value="10">10 XP · small</option>
-                  <option value="20">20 XP · normal</option>
-                  <option value="40">40 XP · hard</option>
-                  <option value="80">80 XP · boss</option>
-                </select>
+                <SearchableSelect
+                  name="xp"
+                  defaultValue="20"
+                  options={[
+                    { value: '10', label: '10 XP · small' },
+                    { value: '20', label: '20 XP · normal' },
+                    { value: '40', label: '40 XP · hard' },
+                    { value: '80', label: '80 XP · boss' },
+                  ]}
+                />
               </label>
             </div>
             <div>

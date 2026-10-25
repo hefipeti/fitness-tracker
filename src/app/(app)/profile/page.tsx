@@ -1,6 +1,7 @@
 import { requireUser } from '@/lib/auth';
 import { Bar, PageHead, Panel, RankBadge, fmtNum } from '@/components/ui';
 import { RunForm } from '@/components/system';
+import { SearchableSelect } from '@/components/searchable-select';
 import { getHunterFull, listAchievements, listWeights, listXpEvents } from '@/lib/queries';
 import { getSettings } from '@/lib/settings';
 import { RANKS, STAT_INFO, type Stats } from '@/lib/game';
@@ -242,14 +243,14 @@ export default async function ProfilePage() {
                 </label>
                 <label className="field">
                   Starting plan
-                  <select name="template" defaultValue="starter">
-                    {PLAN_TEMPLATES.map((t) => (
-                      <option key={t.key} value={t.key}>
-                        {t.name}
-                      </option>
-                    ))}
-                    <option value="none">No plan (build their own)</option>
-                  </select>
+                  <SearchableSelect
+                    name="template"
+                    defaultValue="starter"
+                    options={[
+                      ...PLAN_TEMPLATES.map((t) => ({ value: t.key, label: t.name })),
+                      { value: 'none', label: 'No plan (build their own)' },
+                    ]}
+                  />
                 </label>
                 <div>
                   <button className="btn primary">Create account</button>

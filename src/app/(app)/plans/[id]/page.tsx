@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
 import { notFound } from 'next/navigation';
 import { CategoryBadge, PageHead, Panel } from '@/components/ui';
+import { SearchableSelect } from '@/components/searchable-select';
 import { PlanGuide } from '@/components/plan-guide';
 import { getPlan, listExercises } from '@/lib/queries';
 import { WEEKDAYS } from '@/lib/dates';
@@ -23,14 +24,12 @@ export const metadata = { title: 'Edit plan' };
 
 function WeekdaySelect({ value }: { value: number | null }) {
   return (
-    <select name="weekday" defaultValue={value ?? ''} aria-label="Weekday">
-      <option value="">Unscheduled</option>
-      {WEEKDAYS.map((w, i) => (
-        <option key={w} value={i + 1}>
-          {w}
-        </option>
-      ))}
-    </select>
+    <SearchableSelect
+      name="weekday"
+      defaultValue={value ?? ''}
+      placeholder="Unscheduled"
+      options={WEEKDAYS.map((w, i) => ({ value: i + 1, label: w }))}
+    />
   );
 }
 
@@ -171,16 +170,11 @@ export default async function PlanEditor({ params }: { params: Promise<{ id: str
                 <input type="hidden" name="dayId" value={day.id} />
                 <label className="field" style={{ flex: '2 1 200px' }}>
                   Exercise
-                  <select name="exerciseId" required defaultValue="">
-                    <option value="" disabled>
-                      Select…
-                    </option>
-                    {library.map((x) => (
-                      <option key={x.id} value={x.id}>
-                        {x.name} ({x.category}, {x.mode})
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    name="exerciseId"
+                    required
+                    options={library.map((x) => ({ value: x.id, label: `${x.name} (${x.category}, ${x.mode})` }))}
+                  />
                 </label>
                 <label className="field">
                   Sets

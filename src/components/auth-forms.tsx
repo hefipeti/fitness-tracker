@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
+import { SearchableSelect } from '@/components/searchable-select';
 import { loginAction, setupAction, type AuthState } from '@/lib/actions/auth';
 
 const INITIAL: AuthState = {};
@@ -51,14 +52,14 @@ export function SetupForm({ templates }: { templates: { key: string; name: strin
       </label>
       <label className="field">
         Starting plan
-        <select name="template" defaultValue={templates[0]?.key ?? 'none'}>
-          {templates.map((t) => (
-            <option key={t.key} value={t.key}>
-              {t.name}
-            </option>
-          ))}
-          <option value="none">Keep the existing starter plan</option>
-        </select>
+        <SearchableSelect
+          name="template"
+          defaultValue={templates[0]?.key ?? 'none'}
+          options={[
+            ...templates.map((t) => ({ value: t.key, label: t.name })),
+            { value: 'none', label: 'Keep the existing starter plan' },
+          ]}
+        />
       </label>
       {state.error && (
         <div className="form-error" role="alert">

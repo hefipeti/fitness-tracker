@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
 import { Bar, PageHead, Panel, fmtNum } from '@/components/ui';
 import { RunButton, RunForm } from '@/components/system';
+import { SearchableSelect } from '@/components/searchable-select';
 import { getFoodDay, listFoods } from '@/lib/queries';
 import { getSettings } from '@/lib/settings';
 import { addDays, formatDay, isValidDate, todayStr } from '@/lib/dates';
@@ -124,26 +125,19 @@ export default async function FoodPage({ searchParams }: { searchParams: Promise
                 <input type="hidden" name="date" value={date} />
                 <label className="field">
                   Meal
-                  <select name="meal" defaultValue="lunch">
-                    {MEALS.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    name="meal"
+                    defaultValue="lunch"
+                    options={MEALS.map((m) => ({ value: m, label: m }))}
+                  />
                 </label>
                 <label className="field">
                   Food
-                  <select name="foodId" required defaultValue="">
-                    <option value="" disabled>
-                      Select…
-                    </option>
-                    {foods.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name} · {f.servingLabel} · {fmtNum(f.kcal)} kcal
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    name="foodId"
+                    required
+                    options={foods.map((f) => ({ value: f.id, label: `${f.name} · ${f.servingLabel} · ${fmtNum(f.kcal)} kcal` }))}
+                  />
                 </label>
                 <label className="field">
                   Servings
@@ -167,13 +161,11 @@ export default async function FoodPage({ searchParams }: { searchParams: Promise
                 </label>
                 <label className="field">
                   Meal
-                  <select name="meal" defaultValue="dinner">
-                    {MEALS.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    name="meal"
+                    defaultValue="dinner"
+                    options={MEALS.map((m) => ({ value: m, label: m }))}
+                  />
                 </label>
                 <div className="form-row">
                   <label className="field">

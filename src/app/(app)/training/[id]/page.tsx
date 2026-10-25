@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth';
 import { notFound } from 'next/navigation';
 import { PageHead, Panel } from '@/components/ui';
 import { SessionLogger } from '@/components/session-logger';
+import { SearchableSelect } from '@/components/searchable-select';
 import { getSessionDetail, listExercises } from '@/lib/queries';
 import { formatDay } from '@/lib/dates';
 import { addSessionExerciseAction, deleteSessionAction } from '@/lib/actions/training';
@@ -48,16 +49,11 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             <input type="hidden" name="sessionId" value={session.id} />
             <label className="field" style={{ flex: '2 1 200px' }}>
               Exercise
-              <select name="exerciseId" required defaultValue="">
-                <option value="" disabled>
-                  Select…
-                </option>
-                {addable.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.name} ({e.category})
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                name="exerciseId"
+                required
+                options={addable.map((e) => ({ value: e.id, label: `${e.name} (${e.category})` }))}
+              />
             </label>
             <label className="field">
               Sets

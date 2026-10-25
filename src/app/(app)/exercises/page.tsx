@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
 import { CategoryBadge, PageHead, Panel } from '@/components/ui';
+import { SearchableSelect } from '@/components/searchable-select';
 import { listExercises } from '@/lib/queries';
 import { CATEGORIES, MODES } from '@/lib/types';
 import { archiveExerciseAction, createExerciseAction, updateExerciseAction } from '@/lib/actions/plans';
@@ -37,23 +38,19 @@ export default async function ExercisesPage() {
           </label>
           <label className="field">
             Category
-            <select name="category" defaultValue="push">
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              name="category"
+              defaultValue="push"
+              options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+            />
           </label>
           <label className="field">
             Tracked as
-            <select name="mode" defaultValue="reps">
-              {MODES.map((m) => (
-                <option key={m} value={m}>
-                  {MODE_LABEL[m]}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              name="mode"
+              defaultValue="reps"
+              options={MODES.map((m) => ({ value: m, label: MODE_LABEL[m] }))}
+            />
           </label>
           <button className="btn primary">Add</button>
         </form>
@@ -76,13 +73,11 @@ export default async function ExercisesPage() {
                   </label>
                   <label className="field pe-num" style={{ width: 110 }}>
                     Category
-                    <select name="category" defaultValue={e.category}>
-                      {CATEGORIES.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      name="category"
+                      defaultValue={e.category}
+                      options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+                    />
                   </label>
                   <span className="tiny muted" style={{ width: 150 }}>
                     {MODE_LABEL[e.mode]}

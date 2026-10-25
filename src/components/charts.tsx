@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { SearchableSelect } from '@/components/searchable-select';
 import {
   Bar,
   BarChart,
@@ -149,17 +150,12 @@ export function ExercisePicker({
 }) {
   const router = useRouter();
   return (
-    <select
-      aria-label="Exercise"
+    <SearchableSelect
+      options={options.map((o) => ({ value: o.slug, label: o.name }))}
       value={value}
+      onChange={(v) => router.replace(`${base}&ex=${encodeURIComponent(v)}`, { scroll: false })}
+      ariaLabel="Exercise"
       style={{ width: 'auto', minWidth: 200 }}
-      onChange={(e) => router.replace(`${base}&ex=${encodeURIComponent(e.target.value)}`, { scroll: false })}
-    >
-      {options.map((o) => (
-        <option key={o.slug} value={o.slug}>
-          {o.name}
-        </option>
-      ))}
-    </select>
+    />
   );
 }
