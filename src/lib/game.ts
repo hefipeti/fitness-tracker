@@ -106,6 +106,7 @@ export interface Aggregate {
   goalWeight: number | null;
   minWeight: number | null;
   level: number;
+  nutritionPlanWeeksDone: number;
 }
 
 // ---------- Stats ----------
@@ -203,6 +204,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { key: 'level-10', name: 'Awakened', desc: 'Reach level 10 (D-Rank)', xp: 100, test: (a) => a.level >= 10 },
   { key: 'level-20', name: 'Seasoned Hunter', desc: 'Reach level 20 (C-Rank)', xp: 200, test: (a) => a.level >= 20 },
   { key: 'level-35', name: 'Elite Hunter', desc: 'Reach level 35 (B-Rank)', xp: 400, test: (a) => a.level >= 35 },
+  { key: 'nutrition-plan-week', name: 'Meal Planner', desc: 'Complete a full week following your nutrition plan', xp: 150, test: (a) => a.nutritionPlanWeeksDone >= 1 },
 ];
 
 export function newlyUnlocked(a: Aggregate, unlocked: Set<string>): AchievementDef[] {
@@ -253,6 +255,7 @@ export const SESSION_MAX_SET_XP = 60;
 export const PR_XP = 20;
 export const PR_MAX = 3;
 export const FOOD_DAY_XP = 30;
+export const PLAN_DAY_BONUS_XP = 15;
 export const WEIGHT_LOG_XP = 5;
 
 export function sessionXp(setsDone: number, prs: number): number {

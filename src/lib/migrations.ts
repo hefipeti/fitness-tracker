@@ -307,6 +307,48 @@ CREATE TABLE share_comments (
 CREATE INDEX share_comments_share ON share_comments (share_id);
 `;
 
+const NUTRITION_PLANS = `
+CREATE TABLE nutrition_plans (
+  id         SERIAL PRIMARY KEY,
+  name       TEXT NOT NULL,
+  active     BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  user_id    INT NOT NULL REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX nutrition_plans_one_active ON nutrition_plans (user_id) WHERE active;
+CREATE INDEX nutrition_plans_user ON nutrition_plans (user_id);
+
+CREATE TABLE nutrition_plan_prep_sessions (
+  id           SERIAL PRIMARY KEY,
+  plan_id      INT NOT NULL REFERENCES nutrition_plans(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  cook_weekday SMALLINT NOT NULL CHECK (cook_weekday BETWEEN 1 AND 7),
+  notes        TEXT NOT NULL DEFAULT '',
+  user_id      INT NOT NULL REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX nutrition_plan_prep_sessions_plan ON nutrition_plan_prep_sessions (plan_id);
+
+CREATE TABLE nutrition_plan_prep_foods (
+  id              SERIAL PRIMARY KEY,
+  prep_session_id INT NOT NULL REFERENCES nutrition_plan_prep_sessions(id) ON DELETE CASCADE,
+  food_id         INT NOT NULL REFERENCES foods(id) ON DELETE CASCADE,
+  servings        NUMERIC(6,2) NOT NULL DEFAULT 1
+);
+CREATE INDEX nutrition_plan_prep_foods_session ON nutrition_plan_prep_foods (prep_session_id);
+
+CREATE TABLE nutrition_plan_day_meals (
+  id              SERIAL PRIMARY KEY,
+  plan_id         INT NOT NULL REFERENCES nutrition_plans(id) ON DELETE CASCADE,
+  weekday         SMALLINT NOT NULL CHECK (weekday BETWEEN 1 AND 7),
+  meal            TEXT NOT NULL CHECK (meal IN ('breakfast','lunch','dinner','snack')),
+  food_id         INT NOT NULL REFERENCES foods(id) ON DELETE CASCADE,
+  servings        NUMERIC(6,2) NOT NULL DEFAULT 1,
+  prep_session_id INT REFERENCES nutrition_plan_prep_sessions(id) ON DELETE SET NULL,
+  user_id         INT NOT NULL REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX nutrition_plan_day_meals_plan ON nutrition_plan_day_meals (plan_id, weekday);
+`;
+
 const MIGRATIONS: Migration[] = [
   { id: 1, name: 'initial schema', up: async (c) => void (await c.query(SCHEMA)) },
   { id: 2, name: 'seed exercises, starter plan, foods', up: seed },
@@ -314,6 +356,7 @@ const MIGRATIONS: Migration[] = [
   { id: 4, name: 'assisted/mobility exercises for the 12-week plan', up: addPlanExercises },
   { id: 5, name: 'plan share tokens', up: async (c) => void (await c.query(PLAN_SHARES)) },
   { id: 6, name: 'review links, coach flag, exercise comments', up: async (c) => void (await c.query(SHARE_V2)) },
+  { id: 7, name: 'weekly nutrition plans with prep sessions', up: async (c) => void (await c.query(NUTRITION_PLANS)) },
 ];
 
 export async function runMigrations(): Promise<void> {

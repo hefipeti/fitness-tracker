@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ACHIEVEMENTS,
+  PLAN_DAY_BONUS_XP,
   computeStats,
   computeStreak,
   foodGoalMet,
@@ -25,6 +26,7 @@ const baseAgg = (over: Partial<Aggregate> = {}): Aggregate => ({
   goalWeight: 86,
   minWeight: 94,
   level: 1,
+  nutritionPlanWeeksDone: 0,
   ...over,
 });
 
@@ -186,5 +188,26 @@ describe('assisted mode scoring (less assist is better)', () => {
       exercises: [{ slug: 'assisted-pull-up-machine', category: 'pull', mode: 'assisted', sets: 4, reps: 32, seconds: 0, volumeKg: 0, maxReps: 8, maxSeconds: 0 }],
     });
     expect(computeStats(agg).STR).toBe(10); // 32 pull reps / 40 = 0 whole points, no volume
+  });
+});
+
+describe('nutrition plan', () => {
+  it('PLAN_DAY_BONUS_XP is a positive number', () => {
+    expect(PLAN_DAY_BONUS_XP).toBeGreaterThan(0);
+  });
+
+  it('unlocks nutrition-plan-week after completing one full week on the plan', () => {
+    const agg = baseAgg({ nutritionPlanWeeksDone: 1 });
+    expect(newlyUnlocked(agg, new Set()).map((a) => a.key)).toContain('nutrition-plan-week');
+  });
+
+  it('does not unlock nutrition-plan-week before any full week is completed', () => {
+    const agg = baseAgg({ nutritionPlanWeeksDone: 0 });
+    expect(newlyUnlocked(agg, new Set()).map((a) => a.key)).not.toContain('nutrition-plan-week');
+  });
+
+  it('does not re-unlock nutrition-plan-week once already earned', () => {
+    const agg = baseAgg({ nutritionPlanWeeksDone: 2 });
+    expect(newlyUnlocked(agg, new Set(['nutrition-plan-week'])).map((a) => a.key)).not.toContain('nutrition-plan-week');
   });
 });

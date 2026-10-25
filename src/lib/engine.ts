@@ -100,6 +100,7 @@ export async function getAggregate(uid: number): Promise<Aggregate> {
     goalWeight: settings.goalWeight,
     minWeight: wt?.mn ?? null,
     level: levelInfo(xp).level,
+    nutritionPlanWeeksDone: 0,
   };
 }
 
