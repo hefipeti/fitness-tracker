@@ -27,8 +27,7 @@ function WeekdaySelect({ value }: { value: number | null }) {
     <SearchableSelect
       name="weekday"
       defaultValue={value ?? ''}
-      placeholder="Unscheduled"
-      options={WEEKDAYS.map((w, i) => ({ value: i + 1, label: w }))}
+      options={[{ value: '', label: 'Unscheduled' }, ...WEEKDAYS.map((w, i) => ({ value: i + 1, label: w }))]}
     />
   );
 }
