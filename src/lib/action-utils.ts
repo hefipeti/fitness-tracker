@@ -42,7 +42,7 @@ export function touch(): void {
  */
 export class UserError extends Error {}
 
-export async function guard<T extends ActionResult>(fn: () => Promise<T>): Promise<T | ActionError> {
+export async function guard<T>(fn: () => Promise<T>): Promise<T | ActionError> {
   try {
     return await fn();
   } catch (e) {

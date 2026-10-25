@@ -29,6 +29,15 @@ export async function assertPlanExercise(uid: number, id: number, c?: Queryable)
   if (!row) throw new UserError('Plan exercise not found');
 }
 
+export async function assertPlanExerciseBelongsToPlan(planExerciseId: number, planId: number, c?: Queryable): Promise<void> {
+  const row = await q1(
+    `SELECT 1 FROM plan_exercises pe JOIN plan_days pd ON pd.id = pe.plan_day_id WHERE pe.id = $1 AND pd.plan_id = $2`,
+    [planExerciseId, planId],
+    c,
+  );
+  if (!row) throw new UserError('Exercise not found in this plan');
+}
+
 export async function assertExerciseVisible(uid: number, exerciseId: number, c?: Queryable): Promise<void> {
   const row = await q1(
     'SELECT 1 FROM exercises WHERE id = $1 AND (user_id IS NULL OR user_id = $2)',
