@@ -8,14 +8,12 @@ import { getSettings } from '@/lib/settings';
 import { setRequestLocale } from 'next-intl/server';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
-import { setLocaleCookie } from '@/lib/locale-cookie';
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await requireUser();
   const [hunter, settings] = await Promise.all([getHunterLite(user.id), getSettings(user.id)]);
   const locale = settings.locale ?? 'en';
   setRequestLocale(locale);
-  await setLocaleCookie(locale);
   const messages = await getMessages({ locale });
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
