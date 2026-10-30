@@ -358,6 +358,7 @@ const MIGRATIONS: Migration[] = [
   { id: 6, name: 'review links, coach flag, exercise comments', up: async (c) => void (await c.query(SHARE_V2)) },
   { id: 7, name: 'weekly nutrition plans with prep sessions', up: async (c) => void (await c.query(NUTRITION_PLANS)) },
   { id: 8, name: 'locale preference', up: async (c) => void (await c.query(`ALTER TABLE settings ADD COLUMN locale TEXT NOT NULL DEFAULT 'en' CHECK (locale IN ('en', 'hu'))`)) },
+  { id: 9, name: 'exercise description', up: async (c) => void (await c.query(`ALTER TABLE exercises ADD COLUMN description TEXT NOT NULL DEFAULT ''`)) },
 ];
 
 export async function runMigrations(): Promise<void> {

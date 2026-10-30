@@ -15,16 +15,9 @@ import {
   type GroupBy,
 } from '@/lib/queries';
 import { getSettings } from '@/lib/settings';
+import { getTranslations } from 'next-intl/server';
 
 export const metadata = { title: 'Progress' };
-
-const BY_LABEL: Record<GroupBy, string> = { day: 'Daily', week: 'Weekly', month: 'Monthly' };
-const METRIC_LABEL: Record<string, string> = {
-  reps: 'Best set (reps)',
-  seconds: 'Best hold (seconds)',
-  weighted: 'Estimated 1RM (kg)',
-  assisted: 'Lowest assist with 5+ reps (kg, lower is better)',
-};
 
 export default async function ProgressPage({
   searchParams,
@@ -37,14 +30,36 @@ export default async function ProgressPage({
   const by: GroupBy = (GROUPS as string[]).includes(sp.by ?? '') ? (sp.by as GroupBy) : 'week';
   const since = sinceFor(range);
 
-  const [settings, volume, weights, nutrition, xp, logged] = await Promise.all([
+  const [settings, volume, weights, nutrition, xp, logged, t] = await Promise.all([
     getSettings(uid),
     getVolumeSeries(uid, since, by),
     getWeightSeries(uid, since, by),
     getNutritionSeries(uid, since, by),
     getXpSeries(uid, since, by),
     listLoggedExercises(uid),
+    getTranslations(),
   ]);
+
+  const BY_LABEL: Record<GroupBy, string> = {
+    day: t('progress.groupDay'),
+    week: t('progress.groupWeek'),
+    month: t('progress.groupMonth'),
+  };
+
+  const METRIC_LABEL: Record<string, string> = {
+    reps: t('progress.metricBestReps'),
+    seconds: t('progress.metricBestHold'),
+    weighted: t('progress.metric1rm'),
+    assisted: t('progress.metricAssisted'),
+  };
+
+  const RANGE_LABEL: Record<string, string> = {
+    '30': t('progress.range30'),
+    '90': t('progress.range90'),
+    '180': t('progress.range180'),
+    '365': t('progress.range365'),
+    all: t('progress.rangeAll'),
+  };
 
   const selected = logged.find((e) => e.slug === sp.ex) ?? logged[0] ?? null;
   const progress = selected ? await getExerciseProgress(uid, selected.id, selected.mode, since, by) : [];
@@ -60,16 +75,16 @@ export default async function ProgressPage({
 
   return (
     <>
-      <PageHead kicker="Records" title="Progress">
+      <PageHead kicker={t('progress.kicker')} title={t('progress.title')}>
         <div className="row wrap">
-          <div className="seg" aria-label="Range">
+          <div className="seg" aria-label={t('progress.range')}>
             {RANGES.map((r) => (
               <Link key={r.key} href={`${q(r.key, by)}${selected ? `&ex=${selected.slug}` : ''}`} className={r.key === range ? 'on' : ''}>
-                {r.label}
+                {RANGE_LABEL[r.key] ?? r.label}
               </Link>
             ))}
           </div>
-          <div className="seg" aria-label="Group by">
+          <div className="seg" aria-label={t('progress.groupBy')}>
             {GROUPS.map((g) => (
               <Link key={g} href={`${q(range, g)}${selected ? `&ex=${selected.slug}` : ''}`} className={g === by ? 'on' : ''}>
                 {BY_LABEL[g]}
@@ -80,23 +95,23 @@ export default async function ProgressPage({
       </PageHead>
 
       <div className="grid tiles4">
-        <Tile label="Workouts" value={totalSessions} sub="in range" />
-        <Tile label="Sets" value={fmtNum(totalSets)} sub="completed" />
+        <Tile label={t('progress.workouts')} value={totalSessions} sub={t('progress.workoutsIn')} />
+        <Tile label={t('progress.sets')} value={fmtNum(totalSets)} sub={t('progress.setsCompleted')} />
         <Tile
-          label="Weight change"
-          value={weightDelta == null ? '–' : `${weightDelta > 0 ? '+' : ''}${weightDelta.toFixed(1)} kg`}
-          sub={settings.goalWeight ? `goal ${settings.goalWeight} kg` : undefined}
+          label={t('progress.weightChange')}
+          value={weightDelta == null ? t('progress.noData') : `${weightDelta > 0 ? '+' : ''}${weightDelta.toFixed(1)} kg`}
+          sub={settings.goalWeight ? t('progress.weightGoal', { weight: settings.goalWeight }) : undefined}
         />
-        <Tile label="XP earned" value={fmtNum(totalXp)} sub={avgKcal ? `avg ${fmtNum(avgKcal)} kcal/day` : undefined} />
+        <Tile label={t('progress.xpEarned')} value={fmtNum(totalXp)} sub={avgKcal ? t('progress.avgKcal', { kcal: fmtNum(avgKcal) }) : undefined} />
       </div>
 
       <div className="grid c2 mt">
-        <Panel title={`Training volume · sets per ${by}`}>
+        <Panel title={t('progress.volumeTitle', { by: BY_LABEL[by] })}>
           <VolumeChart data={volume} by={by} />
         </Panel>
 
         <Panel
-          title={selected ? `Progression · ${METRIC_LABEL[selected.mode]}` : 'Progression'}
+          title={selected ? t('progress.progressionTitle', { metric: METRIC_LABEL[selected.mode] }) : t('progress.progressionEmpty')}
           action={
             selected && (
               <ExercisePicker base={base} value={selected.slug} options={logged.map((e) => ({ slug: e.slug, name: e.name }))} />
@@ -112,39 +127,39 @@ export default async function ProgressPage({
               domainPad={false}
             />
           ) : (
-            <div className="empty">Complete a workout to see exercise progression here.</div>
+            <div className="empty">{t('progress.noProgression')}</div>
           )}
         </Panel>
 
-        <Panel title="Body weight (kg)">
+        <Panel title={t('progress.bodyWeight')}>
           <TrendChart
             data={weights.map((w) => ({ period: w.period, kg: w.kg }))}
             by={by}
-            lines={[{ key: 'kg', name: 'Weight', color: '#c4b5fd' }]}
-            refLine={settings.goalWeight ? { value: settings.goalWeight, label: `goal ${settings.goalWeight}` } : undefined}
+            lines={[{ key: 'kg', name: t('progress.weightLabel'), color: '#c4b5fd' }]}
+            refLine={settings.goalWeight ? { value: settings.goalWeight, label: t('progress.goalLabel', { val: settings.goalWeight }) } : undefined}
             unit=""
           />
         </Panel>
 
-        <Panel title="Nutrition · daily average">
+        <Panel title={t('progress.nutritionAvg')}>
           <TrendChart
             data={nutrition.map((n) => ({ period: n.period, kcal: n.kcal }))}
             by={by}
-            lines={[{ key: 'kcal', name: 'kcal', color: '#8b5cf6' }]}
-            refLine={{ value: settings.kcalTarget, label: `target ${settings.kcalTarget}` }}
+            lines={[{ key: 'kcal', name: t('progress.kcalLabel'), color: '#8b5cf6' }]}
+            refLine={{ value: settings.kcalTarget, label: t('progress.targetLabel', { val: settings.kcalTarget }) }}
           />
         </Panel>
 
-        <Panel title="Protein · daily average (g)">
+        <Panel title={t('progress.proteinAvg')}>
           <TrendChart
             data={nutrition.map((n) => ({ period: n.period, protein: n.protein }))}
             by={by}
-            lines={[{ key: 'protein', name: 'protein', color: '#e879f9' }]}
-            refLine={{ value: settings.proteinTarget, label: `target ${settings.proteinTarget}` }}
+            lines={[{ key: 'protein', name: t('progress.proteinLabel'), color: '#e879f9' }]}
+            refLine={{ value: settings.proteinTarget, label: t('progress.targetLabel', { val: settings.proteinTarget }) }}
           />
         </Panel>
 
-        <Panel title={`XP per ${by}`}>
+        <Panel title={t('progress.xpPer', { by: BY_LABEL[by] })}>
           <XpChart data={xp} by={by} />
         </Panel>
       </div>

@@ -11,93 +11,93 @@ import {
   importTemplateAction,
   setActivePlanAction,
 } from '@/lib/actions/plans';
+import { getTranslations } from 'next-intl/server';
 
 export const metadata = { title: 'Plans' };
 
 export default async function PlansPage() {
   const { id: uid } = await requireUser();
-  const plans = await listPlans(uid);
+  const [plans, t] = await Promise.all([listPlans(uid), getTranslations()]);
   return (
     <>
-      <PageHead kicker="Skill tree" title="Training plans">
+      <PageHead kicker={t('plans.kicker')} title={t('plans.title')}>
         <Link className="btn" href="/exercises">
-          Exercise library
+          {t('plans.exerciseLibrary')}
         </Link>
       </PageHead>
 
       <p className="muted small" style={{ maxWidth: 720, marginBottom: 18 }}>
-        A plan is a set of training days with exercises. Only one plan is active at a time and it drives your weekly schedule. Past workouts are
-        never changed when you edit a plan, so you can restructure freely. For a new block, duplicate the current plan, adjust it, then activate it.
+        {t('plans.planDesc')}
       </p>
 
       <div className="grid c2">
         {plans.map((p) => (
-          <Panel key={p.id} title={p.active ? 'Active plan' : 'Plan'} className={p.active ? 'glow' : ''}>
+          <Panel key={p.id} title={p.active ? t('plans.activeLabel') : t('plans.planLabel')} className={p.active ? 'glow' : ''}>
             <div className="row between wrap">
               <h2 style={{ fontSize: '1.15rem' }}>{p.name}</h2>
-              {p.active && <span className="badge on">active</span>}
+              {p.active && <span className="badge on">{t('plans.active')}</span>}
             </div>
             <div className="small muted mt-s">
-              {p.dayCount} training day{p.dayCount === 1 ? '' : 's'} · created {formatShort(p.createdAt.slice(0, 10))}
+              {p.dayCount === 1 ? t('plans.days', { count: p.dayCount }) : t('plans.days_plural', { count: p.dayCount })} · {t('plans.created', { date: formatShort(p.createdAt.slice(0, 10)) })}
             </div>
             {p.notes && <p className="small dim mt-s">{p.notes}</p>}
             <div className="row wrap mt">
               <Link className="btn primary sm" href={`/plans/${p.id}/view`}>
-                View
+                {t('plans.view')}
               </Link>
               <Link className="btn sm ghost" href={`/plans/${p.id}`}>
-                Edit
+                {t('plans.edit')}
               </Link>
               {!p.active && (
                 <form action={setActivePlanAction}>
                   <input type="hidden" name="id" value={p.id} />
-                  <button className="btn sm">Activate</button>
+                  <button className="btn sm">{t('plans.activate')}</button>
                 </form>
               )}
               <form action={duplicatePlanAction}>
                 <input type="hidden" name="id" value={p.id} />
-                <button className="btn sm ghost">Duplicate</button>
+                <button className="btn sm ghost">{t('plans.duplicate')}</button>
               </form>
               {!p.active && (
                 <form action={deletePlanAction}>
                   <input type="hidden" name="id" value={p.id} />
-                  <button className="btn sm danger">Delete</button>
+                  <button className="btn sm danger">{t('plans.delete')}</button>
                 </form>
               )}
             </div>
           </Panel>
         ))}
 
-        <Panel title="Ready-made plans">
+        <Panel title={t('plans.readyMade')}>
           <div className="list">
-            {PLAN_TEMPLATES.map((t) => (
-              <div className="item" key={t.key} style={{ alignItems: 'flex-start' }}>
+            {PLAN_TEMPLATES.map((tmpl) => (
+              <div className="item" key={tmpl.key} style={{ alignItems: 'flex-start' }}>
                 <div className="grow">
-                  <div className="t">{t.name}</div>
-                  <div className="s">{t.description}</div>
+                  <div className="t">{tmpl.name}</div>
+                  <div className="s">{tmpl.description}</div>
                 </div>
                 <form action={importTemplateAction}>
-                  <input type="hidden" name="template" value={t.key} />
-                  <button className="btn sm">Add</button>
+                  <input type="hidden" name="template" value={tmpl.key} />
+                  <button className="btn sm">{t('plans.add')}</button>
                 </form>
               </div>
             ))}
           </div>
-          <p className="tiny dim mt-s">Adds a copy to your plans. Your active plan stays as it is until you activate the new one.</p>
+          <p className="tiny dim mt-s">{t('plans.readyMadeDesc')}</p>
         </Panel>
 
-        <Panel title="New plan">
+        <Panel title={t('plans.newPlan')}>
           <form action={createPlanAction} className="col">
             <label className="field">
-              Name
-              <input name="name" required maxLength={80} placeholder="e.g. Block 2: Pull-up focus" />
+              {t('plans.name')}
+              <input name="name" required maxLength={80} placeholder={t('plans.namePlaceholder')} />
             </label>
             <label className="field">
-              Notes (optional)
-              <input name="notes" maxLength={500} placeholder="Goals for this block" />
+              {t('plans.notes')}
+              <input name="notes" maxLength={500} placeholder={t('plans.notesPlaceholder')} />
             </label>
             <div>
-              <button className="btn primary">Create plan</button>
+              <button className="btn primary">{t('plans.create')}</button>
             </div>
           </form>
         </Panel>

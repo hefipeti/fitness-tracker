@@ -220,7 +220,8 @@ export async function createExerciseAction(fd: FormData): Promise<void> {
   if (!(CATEGORIES as readonly string[]).includes(category)) throw new Error('Invalid category');
   if (!(MODES as readonly string[]).includes(mode)) throw new Error('Invalid mode');
   const slug = await uniqueSlug(name);
-  await q('INSERT INTO exercises (user_id, slug, name, category, mode) VALUES ($1,$2,$3,$4,$5)', [uid, slug, name, category, mode]);
+  const description = fdStr(fd, 'description') ?? '';
+  await q('INSERT INTO exercises (user_id, slug, name, description, category, mode) VALUES ($1,$2,$3,$4,$5,$6)', [uid, slug, name, description, category, mode]);
   touch();
 }
 
@@ -229,11 +230,12 @@ export async function updateExerciseAction(fd: FormData): Promise<void> {
   const category = fdStr(fd, 'category');
   if (!(CATEGORIES as readonly string[]).includes(category)) throw new Error('Invalid category');
   // Mode is intentionally immutable: changing it would reinterpret logged history.
-  await q('UPDATE exercises SET name = $3, category = $4 WHERE id = $1 AND user_id = $2', [
+  await q('UPDATE exercises SET name = $3, category = $4, description = $5 WHERE id = $1 AND user_id = $2', [
     reqInt(fd, 'id'),
     uid,
     reqStr(fd, 'name', 80),
     category,
+    fdStr(fd, 'description') ?? '',
   ]);
   touch();
 }

@@ -5,121 +5,122 @@ import { SearchableSelect } from '@/components/searchable-select';
 import { listDoneTasks, listOpenTasks, type Task } from '@/lib/queries';
 import { formatDay, todayStr } from '@/lib/dates';
 import { createTaskAction, deleteTaskAction, toggleTaskAction } from '@/lib/actions/tasks';
+import { getTranslations } from 'next-intl/server';
 
 export const metadata = { title: 'Quests' };
-
-function TaskRow({ t, today }: { t: Task; today: string }) {
-  const done = !!t.doneAt;
-  const overdue = !done && t.dueDate != null && t.dueDate < today;
-  return (
-    <div className={`item ${done ? 'done' : ''}`}>
-      <TaskCheck done={done} label={done ? `Undo ${t.title}` : `Complete ${t.title}`} action={toggleTaskAction.bind(null, t.id)} />
-      <div className="grow">
-        <div className="t">{t.title}</div>
-        <div className="s">
-          {t.dueDate ? (overdue ? `Overdue · ${formatDay(t.dueDate)}` : formatDay(t.dueDate)) : 'No date'}
-          {t.repeat !== 'none' && ` · repeats ${t.repeat}`} · +{t.xp} XP
-        </div>
-      </div>
-      <form action={deleteTaskAction}>
-        <input type="hidden" name="id" value={t.id} />
-        <button className="btn sm ghost icon" aria-label={`Delete ${t.title}`}>
-          ✕
-        </button>
-      </form>
-    </div>
-  );
-}
 
 export default async function TasksPage() {
   const { id: uid } = await requireUser();
   const today = todayStr();
-  const [open, done] = await Promise.all([listOpenTasks(uid), listDoneTasks(uid, 15)]);
-  const overdue = open.filter((t) => t.dueDate && t.dueDate < today);
-  const dueToday = open.filter((t) => t.dueDate === today);
-  const upcoming = open.filter((t) => t.dueDate && t.dueDate > today);
-  const undated = open.filter((t) => !t.dueDate);
+  const [open, done, t] = await Promise.all([listOpenTasks(uid), listDoneTasks(uid, 15), getTranslations()]);
+  const overdue = open.filter((task) => task.dueDate && task.dueDate < today);
+  const dueToday = open.filter((task) => task.dueDate === today);
+  const upcoming = open.filter((task) => task.dueDate && task.dueDate > today);
+  const undated = open.filter((task) => !task.dueDate);
 
   const groups: [string, Task[]][] = [
-    ['Overdue', overdue],
-    ['Today', dueToday],
-    ['Upcoming', upcoming],
-    ['Anytime', undated],
+    [t('tasks.overdue'), overdue],
+    [t('tasks.today'), dueToday],
+    [t('tasks.upcoming'), upcoming],
+    [t('tasks.anytime'), undated],
   ];
+
+  function renderTask(task: Task) {
+    const isDone = !!task.doneAt;
+    const isOverdue = !isDone && task.dueDate != null && task.dueDate < today;
+    return (
+      <div className={`item ${isDone ? 'done' : ''}`} key={task.id}>
+        <TaskCheck
+          done={isDone}
+          label={isDone ? t('tasks.undo', { title: task.title }) : t('tasks.complete', { title: task.title })}
+          action={toggleTaskAction.bind(null, task.id)}
+        />
+        <div className="grow">
+          <div className="t">{task.title}</div>
+          <div className="s">
+            {task.dueDate
+              ? isOverdue
+                ? `${t('tasks.overdue')} · ${formatDay(task.dueDate)}`
+                : formatDay(task.dueDate)
+              : t('tasks.noDate')}
+            {task.repeat !== 'none' && ` · ${t('tasks.repeats', { repeat: task.repeat })}`} · +{task.xp} XP
+          </div>
+        </div>
+        <form action={deleteTaskAction}>
+          <input type="hidden" name="id" value={task.id} />
+          <button className="btn sm ghost icon" aria-label={t('tasks.delete', { title: task.title })}>
+            ✕
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <>
-      <PageHead kicker="Quest board" title="Quests & tasks" />
+      <PageHead kicker={t('tasks.kicker')} title={t('tasks.title')} />
 
       <div className="grid side-main">
         <div className="col" style={{ gap: 16 }}>
           {open.length === 0 && (
             <Panel>
-              <div className="empty">All quests cleared. Add a new one.</div>
+              <div className="empty">{t('tasks.allCleared')}</div>
             </Panel>
           )}
           {groups.map(
             ([label, list]) =>
               list.length > 0 && (
                 <Panel key={label} title={`${label} (${list.length})`}>
-                  <div className="list">
-                    {list.map((t) => (
-                      <TaskRow key={t.id} t={t} today={today} />
-                    ))}
-                  </div>
+                  <div className="list">{list.map(renderTask)}</div>
                 </Panel>
               ),
           )}
           {done.length > 0 && (
-            <Panel title="Recently completed">
-              <div className="list">
-                {done.map((t) => (
-                  <TaskRow key={t.id} t={t} today={today} />
-                ))}
-              </div>
+            <Panel title={t('tasks.recentlyCompleted')}>
+              <div className="list">{done.map(renderTask)}</div>
             </Panel>
           )}
         </div>
 
-        <Panel title="New quest">
+        <Panel title={t('tasks.newQuest')}>
           <RunForm action={createTaskAction} className="col">
             <label className="field">
-              Title
-              <input name="title" required maxLength={160} placeholder="e.g. Mobility routine 15 min" />
+              {t('tasks.questTitle')}
+              <input name="title" required maxLength={160} placeholder={t('tasks.questTitlePlaceholder')} />
             </label>
             <div className="form-row">
               <label className="field">
-                Due date
+                {t('tasks.dueDate')}
                 <input name="dueDate" type="date" defaultValue={today} />
               </label>
               <label className="field">
-                Repeat
+                {t('tasks.repeat')}
                 <SearchableSelect
                   name="repeat"
                   defaultValue="none"
                   options={[
-                    { value: 'none', label: 'Once' },
-                    { value: 'daily', label: 'Daily' },
-                    { value: 'weekly', label: 'Weekly' },
+                    { value: 'none', label: t('tasks.repeatOnce') },
+                    { value: 'daily', label: t('tasks.repeatDaily') },
+                    { value: 'weekly', label: t('tasks.repeatWeekly') },
                   ]}
                 />
               </label>
               <label className="field">
-                Reward
+                {t('tasks.reward')}
                 <SearchableSelect
                   name="xp"
                   defaultValue="20"
                   options={[
-                    { value: '10', label: '10 XP · small' },
-                    { value: '20', label: '20 XP · normal' },
-                    { value: '40', label: '40 XP · hard' },
-                    { value: '80', label: '80 XP · boss' },
+                    { value: '10', label: t('tasks.reward10') },
+                    { value: '20', label: t('tasks.reward20') },
+                    { value: '40', label: t('tasks.reward40') },
+                    { value: '80', label: t('tasks.reward80') },
                   ]}
                 />
               </label>
             </div>
             <div>
-              <button className="btn primary">Add quest</button>
+              <button className="btn primary">{t('tasks.addQuest')}</button>
             </div>
           </RunForm>
         </Panel>

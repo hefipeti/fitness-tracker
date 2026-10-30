@@ -99,6 +99,7 @@ export interface Exercise {
   id: number;
   slug: string;
   name: string;
+  description: string;
   category: Category;
   mode: Mode;
   archived: boolean;
@@ -108,7 +109,7 @@ export interface Exercise {
 
 export function listExercises(uid: number, includeArchived = false): Promise<Exercise[]> {
   return q<Exercise>(
-    `SELECT id, slug, name, category, mode, archived, (user_id IS NOT NULL) AS custom FROM exercises
+    `SELECT id, slug, name, description, category, mode, archived, (user_id IS NOT NULL) AS custom FROM exercises
      WHERE (user_id IS NULL OR user_id = $1) ${includeArchived ? '' : 'AND NOT archived'}
      ORDER BY category, name`,
     [uid],
@@ -240,6 +241,7 @@ export interface SessionExerciseDetail {
   exerciseId: number;
   slug: string;
   name: string;
+  description: string;
   category: Category;
   mode: Mode;
   position: number;
@@ -260,7 +262,7 @@ export async function getSessionDetail(uid: number, id: number): Promise<Session
   if (!session) return null;
 
   const exs = await q<Omit<SessionExerciseDetail, 'sets' | 'last'>>(
-    `SELECT sx.id, sx.exercise_id AS "exerciseId", ex.slug, ex.name, ex.category, ex.mode, sx.position,
+    `SELECT sx.id, sx.exercise_id AS "exerciseId", ex.slug, ex.name, ex.description, ex.category, ex.mode, sx.position,
             sx.target_sets AS "targetSets", sx.target_reps AS "targetReps", sx.target_weight AS "targetWeight"
      FROM session_exercises sx JOIN exercises ex ON ex.id = sx.exercise_id
      WHERE sx.session_id = $1 ORDER BY sx.position, sx.id`,
