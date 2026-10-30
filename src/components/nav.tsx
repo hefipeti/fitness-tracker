@@ -2,14 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
 const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
 
-const ITEMS: { href: string; label: string; icon: ReactNode }[] = [
+const ITEMS: { href: string; key: string; icon: ReactNode }[] = [
   {
     href: '/',
-    label: 'Status',
+    key: 'status',
     icon: (
       <svg viewBox="0 0 24 24" {...S}>
         <path d="M12 2l8.5 5v10L12 22l-8.5-5V7z" />
@@ -19,7 +20,7 @@ const ITEMS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: '/training',
-    label: 'Training',
+    key: 'training',
     icon: (
       <svg viewBox="0 0 24 24" {...S}>
         <path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12" />
@@ -28,7 +29,7 @@ const ITEMS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: '/plans',
-    label: 'Plans',
+    key: 'plans',
     icon: (
       <svg viewBox="0 0 24 24" {...S}>
         <rect x="4" y="3" width="16" height="18" rx="2" />
@@ -38,7 +39,7 @@ const ITEMS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: '/tasks',
-    label: 'Quests',
+    key: 'quests',
     icon: (
       <svg viewBox="0 0 24 24" {...S}>
         <path d="M9 11l3 3 8-8" />
@@ -48,7 +49,7 @@ const ITEMS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: '/food',
-    label: 'Nutrition',
+    key: 'nutrition',
     icon: (
       <svg viewBox="0 0 24 24" {...S}>
         <path d="M7 3v7a3 3 0 0 0 3 3v8M7 3v5M10 3v5M17 21V3c-2.5 1.5-3.5 4-3.5 8h3.5" />
@@ -57,7 +58,7 @@ const ITEMS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: '/progress',
-    label: 'Progress',
+    key: 'progress',
     icon: (
       <svg viewBox="0 0 24 24" {...S}>
         <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
@@ -66,7 +67,7 @@ const ITEMS: { href: string; label: string; icon: ReactNode }[] = [
   },
   {
     href: '/profile',
-    label: 'Profile',
+    key: 'profile',
     icon: (
       <svg viewBox="0 0 24 24" {...S}>
         <circle cx="12" cy="8" r="4" />
@@ -78,6 +79,7 @@ const ITEMS: { href: string; label: string; icon: ReactNode }[] = [
 
 export function NavLinks() {
   const path = usePathname();
+  const t = useTranslations('nav');
   return (
     <nav className="nav" aria-label="Main">
       {ITEMS.map((i) => {
@@ -85,7 +87,7 @@ export function NavLinks() {
         return (
           <Link key={i.href} href={i.href} className={active ? 'active' : undefined} aria-current={active ? 'page' : undefined}>
             {i.icon}
-            <span>{i.label}</span>
+            <span>{t(i.key as Parameters<typeof t>[0])}</span>
           </Link>
         );
       })}

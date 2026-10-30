@@ -6,42 +6,44 @@ import { getHunterFull, listAchievements, listWeights, listXpEvents } from '@/li
 import { getSettings } from '@/lib/settings';
 import { RANKS, STAT_INFO, type Stats } from '@/lib/game';
 import { formatShort } from '@/lib/dates';
-import { updateSettingsAction } from '@/lib/actions/profile';
+import { updateSettingsAction, updateLocaleAction } from '@/lib/actions/profile';
 import { deleteWeightAction } from '@/lib/actions/food';
 import { changePasswordAction, createAccountAction, resetPasswordAction } from '@/lib/actions/profile';
 import { logoutAction } from '@/lib/actions/auth';
 import { listUsers } from '@/lib/users';
 import { PLAN_TEMPLATES } from '@/lib/templates';
+import { getTranslations } from 'next-intl/server';
 
 export const metadata = { title: 'Profile' };
 
 export default async function ProfilePage() {
   const user = await requireUser();
   const uid = user.id;
-  const [hunter, settings, achievements, events, weights, users] = await Promise.all([
+  const [hunter, settings, achievements, events, weights, users, t] = await Promise.all([
     getHunterFull(uid),
     getSettings(uid),
     listAchievements(uid),
     listXpEvents(uid, 25),
     listWeights(uid, 10),
     user.isAdmin ? listUsers() : Promise.resolve([]),
+    getTranslations(),
   ]);
   const statKeys = Object.keys(STAT_INFO) as (keyof Stats)[];
   const unlocked = achievements.filter((a) => a.unlockedAt).length;
 
   return (
     <>
-      <PageHead kicker="Hunter registry" title="Profile">
+      <PageHead kicker={t('profile.kicker')} title={t('profile.title')}>
         <div className="row">
-          <span className="mono muted small">@{user.username}{user.isAdmin ? ' · admin' : ''}</span>
+          <span className="mono muted small">@{user.username}{user.isAdmin ? t('profile.adminBadge') : ''}</span>
           <form action={logoutAction}>
-            <button className="btn sm">Sign out</button>
+            <button className="btn sm">{t('profile.signOut')}</button>
           </form>
         </div>
       </PageHead>
 
       <div className="grid c2">
-        <Panel title="Rank & stats" className="glow">
+        <Panel title={t('profile.rankStats')} className="glow">
           <div className="row" style={{ gap: 16 }}>
             <RankBadge letter={hunter.rank.letter} size="lg" />
             <div className="grow">
@@ -67,58 +69,70 @@ export default async function ProfilePage() {
             ))}
           </div>
           <div className="tiny dim mt">
-            Ranks: {RANKS.map((r) => `${r.letter} from level ${r.minLevel}`).join(' · ')}
+            {t('profile.ranks', { ranks: RANKS.map((r) => `${r.letter} from level ${r.minLevel}`).join(' · ') })}
           </div>
         </Panel>
 
-        <Panel title="Settings">
+        <Panel title={t('profile.settings')}>
           <form action={updateSettingsAction} className="col">
             <label className="field">
-              Hunter name
+              {t('profile.hunterName')}
               <input name="hunterName" defaultValue={settings.hunterName} required maxLength={40} />
             </label>
             <div className="form-row">
               <label className="field">
-                Daily kcal
+                {t('profile.kcal')}
                 <input name="kcalTarget" type="number" min="500" max="10000" defaultValue={settings.kcalTarget} />
               </label>
               <label className="field">
-                Protein g
+                {t('profile.protein')}
                 <input name="proteinTarget" type="number" min="0" max="600" defaultValue={settings.proteinTarget} />
               </label>
             </div>
             <div className="form-row">
               <label className="field">
-                Carbs g
+                {t('profile.carbs')}
                 <input name="carbsTarget" type="number" min="0" max="1500" defaultValue={settings.carbsTarget} />
               </label>
               <label className="field">
-                Fat g
+                {t('profile.fat')}
                 <input name="fatTarget" type="number" min="0" max="500" defaultValue={settings.fatTarget} />
               </label>
             </div>
             <div className="form-row">
               <label className="field">
-                Start weight kg
+                {t('profile.startWeight')}
                 <input name="startWeight" type="number" step="0.1" defaultValue={settings.startWeight ?? ''} />
               </label>
               <label className="field">
-                Goal weight kg
+                {t('profile.goalWeight')}
                 <input name="goalWeight" type="number" step="0.1" defaultValue={settings.goalWeight ?? ''} />
               </label>
               <label className="field">
-                Height cm
+                {t('profile.height')}
                 <input name="heightCm" type="number" defaultValue={settings.heightCm ?? ''} />
               </label>
             </div>
             <div>
-              <button className="btn primary">Save settings</button>
+              <button className="btn primary">{t('profile.saveSettings')}</button>
             </div>
           </form>
+          <div className="mt-s">
+            <form action={updateLocaleAction} className="form-row">
+              <label className="field">
+                {t('profile.language')}
+                <select name="locale" defaultValue={settings.locale}>
+                  <option value="en">{t('profile.langEn')}</option>
+                  <option value="hu">{t('profile.langHu')}</option>
+                </select>
+              </label>
+              <button className="btn" style={{ alignSelf: 'flex-end' }}>{t('profile.saveSettings')}</button>
+            </form>
+          </div>
         </Panel>
       </div>
 
-      <Panel title={`Achievements · ${unlocked}/${achievements.length}`} className="mt">
+      <Panel title={t('profile.achievements', { unlocked, total: achievements.length })} className="mt">
         <div className="grid c3">
           {achievements.map((a) => (
             <div key={a.key} className={`ach ${a.unlockedAt ? 'on' : ''}`}>
@@ -127,7 +141,7 @@ export default async function ProfilePage() {
                 <div style={{ fontWeight: 600 }}>{a.name}</div>
                 <div className="small muted">{a.desc}</div>
                 <div className="tiny mono" style={{ color: 'var(--violet-2)', marginTop: 2 }}>
-                  {a.unlockedAt ? `Unlocked ${formatShort(a.unlockedAt.slice(0, 10))}` : `+${a.xp} XP`}
+                  {a.unlockedAt ? t('profile.unlocked', { date: formatShort(a.unlockedAt.slice(0, 10)) }) : `+${a.xp} XP`}
                 </div>
               </div>
             </div>
@@ -136,9 +150,9 @@ export default async function ProfilePage() {
       </Panel>
 
       <div className="grid c2 mt">
-        <Panel title="Recent weigh-ins">
+        <Panel title={t('profile.recentWeighIns')}>
           {weights.length === 0 ? (
-            <div className="empty">No weigh-ins yet. Log one from the Status page.</div>
+            <div className="empty">{t('profile.noWeighIns')}</div>
           ) : (
             <div className="list">
               {weights.map((w) => (
@@ -157,9 +171,9 @@ export default async function ProfilePage() {
           )}
         </Panel>
 
-        <Panel title="XP history">
+        <Panel title={t('profile.xpHistory')}>
           {events.length === 0 ? (
-            <div className="empty">Nothing yet.</div>
+            <div className="empty">{t('profile.noXp')}</div>
           ) : (
             <div className="list">
               {events.map((e) => (
@@ -180,28 +194,28 @@ export default async function ProfilePage() {
       </div>
 
       <div className="grid c2 mt">
-        <Panel title="Change password">
+        <Panel title={t('profile.changePassword')}>
           <RunForm action={changePasswordAction} className="col">
             <label className="field">
-              Current password
+              {t('profile.currentPassword')}
               <input name="current" type="password" autoComplete="current-password" required />
             </label>
             <label className="field">
-              New password (min 8 characters)
+              {t('profile.newPassword')}
               <input name="next" type="password" autoComplete="new-password" required minLength={8} />
             </label>
             <label className="field">
-              Repeat new password
+              {t('profile.repeatPassword')}
               <input name="confirm" type="password" autoComplete="new-password" required minLength={8} />
             </label>
             <div>
-              <button className="btn">Change password</button>
+              <button className="btn">{t('profile.changePasswordBtn')}</button>
             </div>
           </RunForm>
         </Panel>
 
         {user.isAdmin && (
-          <Panel title="Accounts (admin)">
+          <Panel title={t('profile.accounts')}>
             <div className="list">
               {users.map((u) => (
                 <div className="item" key={u.id} style={{ alignItems: 'flex-start' }}>
@@ -217,7 +231,7 @@ export default async function ProfilePage() {
                     <RunForm action={resetPasswordAction} className="form-row">
                       <input type="hidden" name="userId" value={u.id} />
                       <label className="field">
-                        New password
+                        {t('auth.newPassword')}
                         <input name="password" type="password" autoComplete="new-password" required minLength={8} />
                       </label>
                       <button className="btn sm">Reset password</button>
@@ -227,38 +241,37 @@ export default async function ProfilePage() {
               ))}
             </div>
             <details className="fold mt">
-              <summary>Add an account (partner)</summary>
+              <summary>{t('profile.addAccount')}</summary>
               <RunForm action={createAccountAction} className="col">
                 <label className="field">
-                  Username
+                  {t('profile.username')}
                   <input name="username" required minLength={3} maxLength={32} autoCapitalize="none" />
                 </label>
                 <label className="field">
-                  Name shown in the app
+                  {t('profile.displayName')}
                   <input name="hunterName" maxLength={40} />
                 </label>
                 <label className="field">
-                  Temporary password (min 8 characters)
+                  {t('profile.tempPassword')}
                   <input name="password" type="password" autoComplete="new-password" required minLength={8} />
                 </label>
                 <label className="field">
-                  Starting plan
+                  {t('profile.startingPlan')}
                   <SearchableSelect
                     name="template"
                     defaultValue="starter"
                     options={[
-                      ...PLAN_TEMPLATES.map((t) => ({ value: t.key, label: t.name })),
-                      { value: 'none', label: 'No plan (build their own)' },
+                      ...PLAN_TEMPLATES.map((tmpl) => ({ value: tmpl.key, label: tmpl.name })),
+                      { value: 'none', label: t('profile.noPlan') },
                     ]}
                   />
                 </label>
                 <div>
-                  <button className="btn primary">Create account</button>
+                  <button className="btn primary">{t('profile.createAccount')}</button>
                 </div>
               </RunForm>
               <p className="tiny dim mt-s">
-                Each account has its own plan, workouts, tasks, nutrition, weight and XP. Tell them to change the password after
-                signing in.
+                {t('profile.accountNote')}
               </p>
             </details>
           </Panel>

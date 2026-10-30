@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
 import { Bar, PageHead, Panel, RankBadge, Tile, fmtNum } from '@/components/ui';
 import { RunForm, TaskCheck } from '@/components/system';
+import { WeekScrollInit } from '@/components/week-scroll';
 import {
   getFoodDay,
   getHunterFull,
@@ -13,16 +14,17 @@ import {
   listXpEvents,
 } from '@/lib/queries';
 import { getSettings } from '@/lib/settings';
-import { formatDay, todayStr, WEEKDAYS } from '@/lib/dates';
+import { formatDay, todayStr } from '@/lib/dates';
 import { STAT_INFO, type Stats } from '@/lib/game';
 import { startSessionAction } from '@/lib/actions/training';
 import { toggleTaskAction } from '@/lib/actions/tasks';
 import { logWeightAction } from '@/lib/actions/food';
+import { getTranslations } from 'next-intl/server';
 
 export default async function StatusPage() {
   const { id: uid } = await requireUser();
   const today = todayStr();
-  const [hunter, settings, scheduled, sessions, week, dueTasks, food, events, weights] = await Promise.all([
+  const [hunter, settings, scheduled, sessions, week, dueTasks, food, events, weights, t] = await Promise.all([
     getHunterFull(uid),
     getSettings(uid),
     getScheduledDays(uid, today),
@@ -32,7 +34,10 @@ export default async function StatusPage() {
     getFoodDay(uid, today),
     listXpEvents(uid, 8),
     listWeights(uid, 1),
+    getTranslations(),
   ]);
+
+  const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
   const statKeys = Object.keys(STAT_INFO) as (keyof Stats)[];
   const statMax = Math.max(20, ...statKeys.map((k) => hunter.stats[k])) * 1.15;
@@ -43,21 +48,21 @@ export default async function StatusPage() {
 
   return (
     <>
-      <PageHead kicker="Status window" title={`Welcome back, ${hunter.name}`}>
+      <PageHead kicker={t('status.kicker')} title={t('status.welcome', { name: hunter.name })}>
         <span className="mono muted small">{formatDay(today)}</span>
       </PageHead>
 
       <div className="grid side-main">
         <div className="col" style={{ gap: 16 }}>
-          <Panel title="Hunter status" className="glow">
+          <Panel title={t('status.hunterStatus')} className="glow">
             <div className="status-top">
               <RankBadge letter={hunter.rank.letter} size="lg" />
               <div className="grow" style={{ minWidth: 220 }}>
                 <div className="small muted" style={{ letterSpacing: '0.2em', textTransform: 'uppercase' }}>
-                  {hunter.rank.letter}-Rank · {hunter.rank.title}
+                  {t('status.rank', { letter: hunter.rank.letter, title: hunter.rank.title })}
                 </div>
                 <div className="row" style={{ alignItems: 'baseline', gap: 12 }}>
-                  <span className="muted mono small">LEVEL</span>
+                  <span className="muted mono small">{t('status.level')}</span>
                   <span className="big-level">{hunter.level}</span>
                 </div>
                 <div className="mt-s">
@@ -70,13 +75,13 @@ export default async function StatusPage() {
                   </div>
                   {hunter.next && (
                     <div className="tiny dim" style={{ marginTop: 2 }}>
-                      Next rank: {hunter.next.letter} at level {hunter.next.minLevel}
+                      {t('status.nextRank', { letter: hunter.next.letter, minLevel: hunter.next.minLevel })}
                     </div>
                   )}
                 </div>
               </div>
             </div>
-            <div className="col mt" style={{ gap: 8 }}>
+            <div className="stats-grid mt">
               {statKeys.map((k) => (
                 <div className="stat-row" key={k} title={`${STAT_INFO[k].name}: ${STAT_INFO[k].formula}`}>
                   <span className="k">{k}</span>
@@ -88,40 +93,43 @@ export default async function StatusPage() {
           </Panel>
 
           <div className="grid tiles3">
-            <Tile label="Active streak" value={`${hunter.streak}d`} sub="training or food logged" />
-            <Tile label="This week" value={`${doneThisWeek}/${plannedThisWeek || '–'}`} sub="workouts done / planned" />
-            <Tile label="Total workouts" value={hunter.sessions} sub={`${hunter.foodGoalDays} nutrition days hit`} />
+            <Tile label={t('status.activeStreak')} value={`${hunter.streak}d`} sub={t('status.streakSub')} />
+            <Tile label={t('status.thisWeek')} value={`${doneThisWeek}/${plannedThisWeek || '–'}`} sub={t('status.thisWeekSub')} />
+            <Tile label={t('status.totalWorkouts')} value={hunter.sessions} sub={t('status.totalWorkoutsSub', { count: hunter.foodGoalDays })} />
           </div>
 
-          <Panel title="This week">
-            <div className="week">
-              {week.map((d) => (
-                <div key={d.date} className={`day ${d.isToday ? 'today' : ''} ${d.done > 0 ? 'done' : ''}`}>
-                  <span className="dn">{WEEKDAYS[d.weekday - 1]}</span>
-                  <span className="dd">{d.date.slice(8)}</span>
-                  {d.scheduled.map((n) => (
-                    <span key={n} className="ds">
-                      {n}
-                    </span>
-                  ))}
-                  {d.inProgress > 0 && <span className="ds">in progress</span>}
-                </div>
-              ))}
+          <Panel title={t('status.thisWeekPanel')}>
+            <WeekScrollInit />
+            <div className="week-scroll">
+              <div className="week" id="week-grid">
+                {week.map((d) => (
+                  <div key={d.date} className={`day ${d.isToday ? 'today' : ''} ${d.done > 0 ? 'done' : ''}`}>
+                    <span className="dn">{t(`weekdays.${WEEKDAY_KEYS[d.weekday - 1]}`)}</span>
+                    <span className="dd">{d.date.slice(8)}</span>
+                    {d.scheduled.map((n) => (
+                      <span key={n} className="ds">
+                        {n}
+                      </span>
+                    ))}
+                    {d.inProgress > 0 && <span className="ds">{t('status.inProgress')}</span>}
+                  </div>
+                ))}
+              </div>
             </div>
           </Panel>
         </div>
 
         <div className="col" style={{ gap: 16 }}>
-          <Panel title="Daily quests">
+          <Panel title={t('status.dailyQuests')}>
             <div className="list">
               {scheduled.length === 0 && freeSessions.length === 0 && (
                 <div className="item">
                   <div className="grow">
-                    <div className="t">Rest day</div>
-                    <div className="s">Nothing scheduled. Recover, or start a free workout.</div>
+                    <div className="t">{t('status.restDay')}</div>
+                    <div className="s">{t('status.restDaySub')}</div>
                   </div>
                   <Link className="btn sm" href="/training">
-                    Training
+                    {t('nav.training')}
                   </Link>
                 </div>
               )}
@@ -130,38 +138,45 @@ export default async function StatusPage() {
                 return (
                   <div className="item" key={d.id}>
                     <div className="grow">
-                      <div className="t">Training: {d.name}</div>
+                      <div className="t">{t('status.training')}: {d.name}</div>
                       <div className="s">
-                        {s?.completedAt ? `Completed · +${s.xp} XP` : s ? 'In progress' : `${d.exerciseCount} exercises`}
+                        {s?.completedAt ? t('status.completed', { xp: s.xp }) : s ? t('status.inProgress') : t('status.exercises', { count: d.exerciseCount })}
                       </div>
                     </div>
-                    {s ? (
-                      <Link className={`btn sm ${s.completedAt ? 'ghost' : 'primary'}`} href={`/training/${s.id}`}>
-                        {s.completedAt ? 'View' : 'Resume'}
-                      </Link>
-                    ) : (
-                      <form action={startSessionAction}>
-                        <input type="hidden" name="planDayId" value={d.id} />
-                        <button className="btn sm primary">Start</button>
-                      </form>
-                    )}
+                    <div className="row" style={{ gap: 6 }}>
+                      {!s && (
+                        <Link className="btn sm ghost" href={`/training/preview/${d.id}`}>
+                          {t('status.preview')}
+                        </Link>
+                      )}
+                      {s ? (
+                        <Link className={`btn sm ${s.completedAt ? 'ghost' : 'primary'}`} href={`/training/${s.id}`}>
+                          {s.completedAt ? t('status.view') : t('status.resume')}
+                        </Link>
+                      ) : (
+                        <form action={startSessionAction}>
+                          <input type="hidden" name="planDayId" value={d.id} />
+                          <button className="btn sm primary">{t('status.start')}</button>
+                        </form>
+                      )}
+                    </div>
                   </div>
                 );
               })}
               {freeSessions.map((s) => (
                 <div className="item" key={s.id}>
                   <div className="grow">
-                    <div className="t">Training: {s.name}</div>
-                    <div className="s">{s.completedAt ? `Completed · +${s.xp} XP` : 'In progress'}</div>
+                    <div className="t">{t('status.training')}: {s.name}</div>
+                    <div className="s">{s.completedAt ? t('status.completed', { xp: s.xp }) : t('status.inProgress')}</div>
                   </div>
                   <Link className="btn sm ghost" href={`/training/${s.id}`}>
-                    {s.completedAt ? 'View' : 'Resume'}
+                    {s.completedAt ? t('status.view') : t('status.resume')}
                   </Link>
                 </div>
               ))}
               <div className="item">
                 <div className="grow">
-                  <div className="t">Nutrition targets</div>
+                  <div className="t">{t('status.nutritionTargets')}</div>
                   <div className="s mono">
                     {fmtNum(food.totals.kcal)} / {settings.kcalTarget} kcal · {fmtNum(food.totals.protein)} / {settings.proteinTarget} g protein
                   </div>
@@ -170,16 +185,16 @@ export default async function StatusPage() {
                   </div>
                 </div>
                 <Link className="btn sm" href="/food">
-                  Log
+                  {t('status.log')}
                 </Link>
               </div>
-              {dueTasks.map((t) => (
-                <div className="item" key={t.id}>
-                  <TaskCheck done={false} label={`Complete ${t.title}`} action={toggleTaskAction.bind(null, t.id)} />
+              {dueTasks.map((task) => (
+                <div className="item" key={task.id}>
+                  <TaskCheck done={false} label={t('status.complete', { title: task.title })} action={toggleTaskAction.bind(null, task.id)} />
                   <div className="grow">
-                    <div className="t">{t.title}</div>
+                    <div className="t">{task.title}</div>
                     <div className="s">
-                      {t.dueDate && t.dueDate < today ? `Overdue (${formatDay(t.dueDate)})` : 'Due today'} · +{t.xp} XP
+                      {task.dueDate && task.dueDate < today ? t('status.overdue', { date: formatDay(task.dueDate) }) : t('status.dueToday')} · +{task.xp} XP
                     </div>
                   </div>
                 </div>
@@ -187,20 +202,20 @@ export default async function StatusPage() {
             </div>
           </Panel>
 
-          <Panel title="Weigh-in" action={lastWeight && <span className="mono">{lastWeight.kg} kg</span>}>
+          <Panel title={t('status.weighIn')} action={lastWeight && <span className="mono">{lastWeight.kg} kg</span>}>
             <RunForm action={logWeightAction} className="form-row">
               <label className="field">
-                Body weight (kg)
+                {t('status.bodyWeight')}
                 <input name="kg" type="number" step="0.1" min="20" max="400" required placeholder={lastWeight ? String(lastWeight.kg) : '90.0'} />
               </label>
-              <button className="btn primary">Log (+5 XP)</button>
+              <button className="btn primary">{t('status.logWeight')}</button>
             </RunForm>
-            {settings.goalWeight && <div className="tiny dim mt-s">Goal: {settings.goalWeight} kg</div>}
+            {settings.goalWeight && <div className="tiny dim mt-s">{t('status.goal', { weight: settings.goalWeight })}</div>}
           </Panel>
 
-          <Panel title="System log">
+          <Panel title={t('status.systemLog')}>
             {events.length === 0 ? (
-              <div className="empty">No XP earned yet. Complete a quest to begin.</div>
+              <div className="empty">{t('status.noXp')}</div>
             ) : (
               <div className="list">
                 {events.map((e) => (

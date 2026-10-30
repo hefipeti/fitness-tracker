@@ -2,6 +2,7 @@
 
 import { q, q1 } from '../db';
 import { requireUser, requireUserId, startSession } from '../auth';
+import { setLocaleCookie } from '../locale-cookie';
 import { deleteUserSessions, hashPassword, validatePassword, verifyPassword } from '../auth-core';
 import { createAccount } from '../users';
 import { UserError, fdInt, fdNum, fdStr, guard, reqInt, reqStr, touch } from '../action-utils';
@@ -87,4 +88,13 @@ export async function resetPasswordAction(fd: FormData): Promise<ActionNote | Ac
     if (id === admin.id) await startSession(id);
     return { note: 'Password reset. That account was signed out everywhere.' };
   });
+}
+
+export async function updateLocaleAction(fd: FormData): Promise<void> {
+  const uid = await requireUserId();
+  const locale = String(fd.get('locale') ?? 'en');
+  if (!['en', 'hu'].includes(locale)) return;
+  await q(`UPDATE settings SET locale = $2 WHERE user_id = $1`, [uid, locale]);
+  await setLocaleCookie(locale);
+  touch();
 }

@@ -9,6 +9,7 @@ export interface Settings {
   startWeight: number | null;
   goalWeight: number | null;
   heightCm: number | null;
+  locale: string;
 }
 
 const DEFAULTS: Settings = {
@@ -20,13 +21,14 @@ const DEFAULTS: Settings = {
   startWeight: null,
   goalWeight: null,
   heightCm: null,
+  locale: 'en',
 };
 
 export async function getSettings(uid: number): Promise<Settings> {
   const row = await q1<Settings>(
     `SELECT hunter_name AS "hunterName", kcal_target AS "kcalTarget", protein_target AS "proteinTarget",
             carbs_target AS "carbsTarget", fat_target AS "fatTarget", start_weight AS "startWeight",
-            goal_weight AS "goalWeight", height_cm AS "heightCm"
+            goal_weight AS "goalWeight", height_cm AS "heightCm", locale
      FROM settings WHERE user_id = $1`,
     [uid],
   );
