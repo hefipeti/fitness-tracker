@@ -2,7 +2,7 @@
 
 import { useActionState } from 'react';
 import { SearchableSelect } from '@/components/searchable-select';
-import { loginAction, setupAction, type AuthState } from '@/lib/actions/auth';
+import { loginAction, registerAction, setupAction, type AuthState } from '@/lib/actions/auth';
 
 const INITIAL: AuthState = {};
 
@@ -25,6 +25,34 @@ export function LoginForm() {
       )}
       <button className="btn primary" disabled={pending}>
         {pending ? 'Signing in…' : 'Sign in'}
+      </button>
+    </form>
+  );
+}
+
+export function RegisterForm() {
+  const [state, action, pending] = useActionState(registerAction, INITIAL);
+  return (
+    <form action={action} className="col">
+      <label className="field">
+        Username
+        <input name="username" autoComplete="username" autoCapitalize="none" autoFocus required minLength={3} maxLength={32} />
+      </label>
+      <label className="field">
+        Password (min 8 characters)
+        <input name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={200} />
+      </label>
+      <label className="field">
+        Repeat password
+        <input name="confirm" type="password" autoComplete="new-password" required minLength={8} maxLength={200} />
+      </label>
+      {state.error && (
+        <div className="form-error" role="alert">
+          {state.error}
+        </div>
+      )}
+      <button className="btn primary" disabled={pending}>
+        {pending ? 'Creating…' : 'Create account'}
       </button>
     </form>
   );

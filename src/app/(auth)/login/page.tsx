@@ -15,6 +15,10 @@ export default async function LoginPage() {
         Each person has their own profile, plan, history and goals.
       </p>
       <LoginForm />
+      <p className="small muted" style={{ marginTop: 16, textAlign: 'center' }}>
+        No account yet?{' '}
+        <a href="/register">Create one</a>
+      </p>
     </>
   );
 }

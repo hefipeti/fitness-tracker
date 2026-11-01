@@ -66,6 +66,30 @@ export async function setupAction(_prev: AuthState, fd: FormData): Promise<AuthS
   redirect('/');
 }
 
+export async function registerAction(_prev: AuthState, fd: FormData): Promise<AuthState> {
+  const password = String(fd.get('password') ?? '');
+  if (password !== String(fd.get('confirm') ?? '')) return { error: 'The passwords do not match' };
+  const err = validatePassword(password);
+  if (err) return { error: err };
+
+  let userId: number;
+  try {
+    const username = fdStr(fd, 'username');
+    ({ userId } = await createAccount({
+      username,
+      password,
+      hunterName: username,
+      templateKey: 'none',
+      isAdmin: false,
+    }));
+  } catch (e) {
+    if (e instanceof UserError) return { error: e.message };
+    throw e;
+  }
+  await startSession(userId);
+  redirect('/');
+}
+
 export async function logoutAction(): Promise<void> {
   await endSession();
   redirect('/login');
