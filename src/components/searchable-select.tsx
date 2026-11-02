@@ -125,7 +125,7 @@ export function SearchableSelect({ options, placeholder = 'Select…', style, ar
                   role="option"
                   aria-selected={String(o.value) === currentValue}
                   className={`ss-opt${String(o.value) === currentValue ? ' on' : ''}`}
-                  onClick={() => select(String(o.value))}
+                  onPointerDown={(e) => { e.preventDefault(); select(String(o.value)); }}
                 >
                   {o.label}
                 </button>
