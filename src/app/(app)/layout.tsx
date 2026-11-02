@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { NavLinks } from '@/components/nav';
 import { HunterMini } from '@/components/ui';
+import { MobileFabNav } from '@/components/mobile-nav';
 import { requireUser } from '@/lib/auth';
 import { getHunterLite } from '@/lib/queries';
 import { logoutAction } from '@/lib/actions/auth';
@@ -45,6 +46,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </div>
           <main className="main">{children}</main>
         </div>
+        <MobileFabNav />
       </div>
     </NextIntlClientProvider>
   );
