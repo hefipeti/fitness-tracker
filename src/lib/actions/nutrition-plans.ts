@@ -174,6 +174,65 @@ export async function removePlannedMealAction(fd: FormData): Promise<ActionError
   });
 }
 
+export async function addPrepIngredientAction(fd: FormData): Promise<ActionError | void> {
+  const uid = await requireUserId();
+  return guard(async () => {
+    const sessionId = reqInt(fd, 'prepSessionId');
+    await assertPrepSession(uid, sessionId);
+    const name = reqStr(fd, 'name', 200);
+    const unit = fdStr(fd, 'unit').slice(0, 50);
+    await q(
+      'INSERT INTO nutrition_plan_prep_ingredients (prep_session_id, user_id, name, unit) VALUES ($1,$2,$3,$4)',
+      [sessionId, uid, name, unit],
+    );
+    touch();
+  });
+}
+
+export async function removePrepIngredientAction(fd: FormData): Promise<ActionError | void> {
+  const uid = await requireUserId();
+  return guard(async () => {
+    const id = reqInt(fd, 'id');
+    const row = await q1(
+      `SELECT 1 FROM nutrition_plan_prep_ingredients pi
+       JOIN nutrition_plan_prep_sessions s ON s.id = pi.prep_session_id
+       WHERE pi.id = $1 AND pi.user_id = $2 AND pi.deleted_at IS NULL AND s.deleted_at IS NULL`,
+      [id, uid],
+    );
+    if (!row) throw new UserError('Ingredient not found');
+    await q('UPDATE nutrition_plan_prep_ingredients SET deleted_at = now() WHERE id = $1', [id]);
+    touch();
+  });
+}
+
+export async function addShoppingItemAction(fd: FormData): Promise<ActionError | void> {
+  const uid = await requireUserId();
+  return guard(async () => {
+    const planId = reqInt(fd, 'planId');
+    await assertNutritionPlan(uid, planId);
+    const name = reqStr(fd, 'name', 200);
+    const quantity = fdStr(fd, 'quantity').slice(0, 100);
+    await q(
+      'INSERT INTO nutrition_plan_shopping_items (plan_id, user_id, name, quantity) VALUES ($1,$2,$3,$4)',
+      [planId, uid, name, quantity],
+    );
+    touch();
+  });
+}
+
+export async function removeShoppingItemAction(fd: FormData): Promise<ActionError | void> {
+  const uid = await requireUserId();
+  return guard(async () => {
+    const id = reqInt(fd, 'id');
+    const row = await q1(
+      'UPDATE nutrition_plan_shopping_items SET deleted_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL RETURNING id',
+      [id, uid],
+    );
+    if (!row) throw new UserError('Shopping item not found');
+    touch();
+  });
+}
+
 // Returns {conflict: true} when the day already has food logs and no mode is given.
 // mode 'append' adds on top of existing logs; mode 'replace' clears the day first.
 export async function importPlanDayAction(fd: FormData): Promise<ActionError | { conflict: true } | void> {

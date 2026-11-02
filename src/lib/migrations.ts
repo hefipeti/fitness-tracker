@@ -394,6 +394,40 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    id: 15,
+    name: 'nutrition plan prep ingredients (manual, no food FK)',
+    up: async (c) => {
+      await c.query(`
+        CREATE TABLE nutrition_plan_prep_ingredients (
+          id              SERIAL PRIMARY KEY,
+          prep_session_id INT NOT NULL REFERENCES nutrition_plan_prep_sessions(id) ON DELETE CASCADE,
+          user_id         INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          name            TEXT NOT NULL,
+          unit            TEXT NOT NULL DEFAULT '',
+          deleted_at      TIMESTAMPTZ
+        );
+        CREATE INDEX nutrition_plan_prep_ingredients_session ON nutrition_plan_prep_ingredients (prep_session_id);
+      `);
+    },
+  },
+  {
+    id: 14,
+    name: 'nutrition plan shopping list',
+    up: async (c) => {
+      await c.query(`
+        CREATE TABLE nutrition_plan_shopping_items (
+          id         SERIAL PRIMARY KEY,
+          plan_id    INT NOT NULL REFERENCES nutrition_plans(id) ON DELETE CASCADE,
+          user_id    INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          name       TEXT NOT NULL,
+          quantity   TEXT NOT NULL DEFAULT '',
+          deleted_at TIMESTAMPTZ
+        );
+        CREATE INDEX nutrition_plan_shopping_items_plan ON nutrition_plan_shopping_items (plan_id);
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

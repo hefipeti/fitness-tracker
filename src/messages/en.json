@@ -356,7 +356,20 @@
     "editPrepSession": "Edit prep session",
     "notesMarkdown": "Notes (markdown supported)",
     "saveName": "Rename",
-    "saveSession": "Save session"
+    "saveSession": "Save session",
+    "addMeal": "+ Add meal",
+    "remove": "Remove",
+    "shoppingList": "Shopping list",
+    "noShoppingItems": "No meals planned yet.",
+    "newPrepSession": "+ New prep session",
+    "prepSessionNamePlaceholder": "e.g. Sunday batch cook",
+    "createPrepSession": "Create session",
+    "addItem": "Add",
+    "shoppingItemPlaceholder": "e.g. Chicken breast",
+    "shoppingQuantityPlaceholder": "e.g. 1 kg",
+    "ingredientNamePlaceholder": "e.g. Chicken breast",
+    "ingredientUnitPlaceholder": "e.g. 500g",
+    "deleteSession": "Delete session"
   },
   "weekdays": {
     "mon": "Mon",

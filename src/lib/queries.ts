@@ -791,12 +791,19 @@ export interface PrepFood {
   fat: number;
 }
 
+export interface PrepIngredient {
+  id: number;
+  name: string;
+  unit: string;
+}
+
 export interface PrepSession {
   id: number;
   name: string;
   cookWeekday: number;
   notes: string;
   foods: PrepFood[];
+  ingredients: PrepIngredient[];
 }
 
 export interface DayMeal {
@@ -833,8 +840,8 @@ export async function getNutritionPlan(uid: number, planId: number): Promise<Nut
   );
   if (!plan) return null;
 
-  const [sessions, prepFoodsRaw, dayMeals] = await Promise.all([
-    q<Omit<PrepSession, 'foods'>>(
+  const [sessions, prepFoodsRaw, prepIngredientsRaw, dayMeals] = await Promise.all([
+    q<Omit<PrepSession, 'foods' | 'ingredients'>>(
       `SELECT id, name, cook_weekday AS "cookWeekday", notes
        FROM nutrition_plan_prep_sessions WHERE plan_id = $1 AND deleted_at IS NULL ORDER BY id`,
       [planId],
@@ -848,6 +855,13 @@ export async function getNutritionPlan(uid: number, planId: number): Promise<Nut
        JOIN foods f ON f.id = pf.food_id
        JOIN nutrition_plan_prep_sessions s ON s.id = pf.prep_session_id
        WHERE s.plan_id = $1 AND pf.deleted_at IS NULL AND s.deleted_at IS NULL ORDER BY pf.id`,
+      [planId],
+    ),
+    q<PrepIngredient & { prepSessionId: number }>(
+      `SELECT pi.id, pi.prep_session_id AS "prepSessionId", pi.name, pi.unit
+       FROM nutrition_plan_prep_ingredients pi
+       JOIN nutrition_plan_prep_sessions s ON s.id = pi.prep_session_id
+       WHERE s.plan_id = $1 AND pi.deleted_at IS NULL AND s.deleted_at IS NULL ORDER BY pi.id`,
       [planId],
     ),
     q<DayMeal>(
@@ -871,9 +885,19 @@ export async function getNutritionPlan(uid: number, planId: number): Promise<Nut
     foodsBySession.get(f.prepSessionId)!.push(f);
   }
 
+  const ingredientsBySession = new Map<number, PrepIngredient[]>();
+  for (const i of prepIngredientsRaw) {
+    if (!ingredientsBySession.has(i.prepSessionId)) ingredientsBySession.set(i.prepSessionId, []);
+    ingredientsBySession.get(i.prepSessionId)!.push({ id: i.id, name: i.name, unit: i.unit });
+  }
+
   return {
     ...plan,
-    prepSessions: sessions.map((s) => ({ ...s, foods: foodsBySession.get(s.id) ?? [] })),
+    prepSessions: sessions.map((s) => ({
+      ...s,
+      foods: foodsBySession.get(s.id) ?? [],
+      ingredients: ingredientsBySession.get(s.id) ?? [],
+    })),
     dayMeals,
   };
 }
@@ -882,4 +906,20 @@ export async function getActiveNutritionPlan(uid: number): Promise<NutritionPlan
   const row = await q1<{ id: number }>('SELECT id FROM nutrition_plans WHERE user_id = $1 AND active = TRUE AND deleted_at IS NULL', [uid]);
   if (!row) return null;
   return getNutritionPlan(uid, row.id);
+}
+
+export interface ShoppingItem {
+  id: number;
+  name: string;
+  quantity: string;
+}
+
+export async function getShoppingList(uid: number, planId: number): Promise<ShoppingItem[]> {
+  return q<ShoppingItem>(
+    `SELECT id, name, quantity
+     FROM nutrition_plan_shopping_items
+     WHERE plan_id = $2 AND user_id = $1 AND deleted_at IS NULL
+     ORDER BY id`,
+    [uid, planId]
+  );
 }

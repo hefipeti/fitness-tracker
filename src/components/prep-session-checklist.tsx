@@ -4,12 +4,12 @@ import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { PrepSession } from '@/lib/queries';
 
-const storageKey = (sessionId: number, foodId: number) => `prep-check-${sessionId}-${foodId}`;
+const storageKey = (sessionId: number, ingredientId: number) => `prep-check-${sessionId}-${ingredientId}`;
 
-function loadChecked(sessionId: number, foodIds: number[]): Set<number> {
+function loadChecked(sessionId: number, ids: number[]): Set<number> {
   if (typeof window === 'undefined') return new Set();
   const result = new Set<number>();
-  for (const id of foodIds) {
+  for (const id of ids) {
     if (localStorage.getItem(storageKey(sessionId, id)) === '1') result.add(id);
   }
   return result;
@@ -22,31 +22,31 @@ export function PrepSessionChecklist({
   session: PrepSession;
   dayNames: Record<number, string>;
 }) {
-  const foodIds = session.foods.map((f) => f.id);
+  const ids = session.ingredients.map((i) => i.id);
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    setChecked(loadChecked(session.id, foodIds));
+    setChecked(loadChecked(session.id, ids));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id]);
 
-  const toggle = (foodId: number) => {
+  const toggle = (id: number) => {
     setChecked((prev) => {
       const next = new Set(prev);
-      if (next.has(foodId)) {
-        next.delete(foodId);
-        localStorage.removeItem(storageKey(session.id, foodId));
+      if (next.has(id)) {
+        next.delete(id);
+        localStorage.removeItem(storageKey(session.id, id));
       } else {
-        next.add(foodId);
-        localStorage.setItem(storageKey(session.id, foodId), '1');
+        next.add(id);
+        localStorage.setItem(storageKey(session.id, id), '1');
       }
       return next;
     });
   };
 
-  const allChecked = foodIds.length > 0 && foodIds.every((id) => checked.has(id));
-  const checkedCount = foodIds.filter((id) => checked.has(id)).length;
+  const allChecked = ids.length > 0 && ids.every((id) => checked.has(id));
+  const checkedCount = ids.filter((id) => checked.has(id)).length;
 
   return (
     <div className="panel">
@@ -66,7 +66,7 @@ export function PrepSessionChecklist({
         <span className="row" style={{ gap: 8 }}>
           {allChecked && <span className="badge on">ready</span>}
           {!allChecked && checkedCount > 0 && (
-            <span className="badge">{checkedCount}/{foodIds.length}</span>
+            <span className="badge">{checkedCount}/{ids.length}</span>
           )}
           <span className="small muted">{open ? '▲' : '▼'}</span>
         </span>
@@ -79,15 +79,15 @@ export function PrepSessionChecklist({
               <ReactMarkdown>{session.notes}</ReactMarkdown>
             </div>
           )}
-          {session.foods.length === 0 ? (
+          {session.ingredients.length === 0 ? (
             <div className="small dim">No ingredients added.</div>
           ) : (
             <div className="list">
-              {session.foods.map((f) => {
-                const isChecked = checked.has(f.id);
+              {session.ingredients.map((ing) => {
+                const isChecked = checked.has(ing.id);
                 return (
                   <button
-                    key={f.id}
+                    key={ing.id}
                     type="button"
                     className="item"
                     style={{
@@ -99,14 +99,10 @@ export function PrepSessionChecklist({
                       padding: 0,
                       opacity: isChecked ? 0.5 : 1,
                     }}
-                    onClick={() => toggle(f.id)}
+                    onClick={() => toggle(ing.id)}
                     aria-pressed={isChecked}
                   >
-                    <div
-                      className="check"
-                      style={{ flexShrink: 0 }}
-                      aria-hidden
-                    >
+                    <div className="check" style={{ flexShrink: 0 }} aria-hidden>
                       {isChecked && (
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M5 12l5 5L20 7" />
@@ -115,12 +111,9 @@ export function PrepSessionChecklist({
                     </div>
                     <div className="grow">
                       <div className="t" style={{ textDecoration: isChecked ? 'line-through' : undefined }}>
-                        {f.name}
+                        {ing.name}
                       </div>
-                      <div className="s mono">
-                        ×{f.servings} {f.servingLabel}
-                        <span className="dim"> · {Math.round(f.kcal * f.servings)} kcal · P {Math.round(f.protein * f.servings)}g</span>
-                      </div>
+                      {ing.unit && <div className="s mono">{ing.unit}</div>}
                     </div>
                   </button>
                 );
