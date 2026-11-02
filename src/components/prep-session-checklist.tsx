@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import type { PrepSession } from '@/lib/queries';
 
 const storageKey = (sessionId: number, foodId: number) => `prep-check-${sessionId}-${foodId}`;
@@ -74,8 +75,8 @@ export function PrepSessionChecklist({
       {open && (
         <div style={{ marginTop: 12 }}>
           {session.notes && (
-            <div className="small muted" style={{ marginBottom: 10, fontStyle: 'italic' }}>
-              {session.notes}
+            <div className="prep-notes small" style={{ marginBottom: 10 }}>
+              <ReactMarkdown>{session.notes}</ReactMarkdown>
             </div>
           )}
           {session.foods.length === 0 ? (

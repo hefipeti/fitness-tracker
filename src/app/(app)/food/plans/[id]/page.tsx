@@ -4,8 +4,13 @@ import { requireUser } from '@/lib/auth';
 import { PageHead,  fmtNum } from '@/components/ui';
 import { getNutritionPlan } from '@/lib/queries';
 import { PrepSessionChecklist } from '@/components/prep-session-checklist';
+import { updateNutritionPlanAction, updatePrepSessionAction } from '@/lib/actions/nutrition-plans';
 import { getTranslations } from 'next-intl/server';
 import type { DayMeal } from '@/lib/queries';
+import type { ActionError } from '@/lib/types';
+
+type NutritionAction = (fd: FormData) => Promise<ActionError | void>;
+const asFormAction = (fn: NutritionAction) => fn as unknown as (fd: FormData) => Promise<void>;
 
 export const metadata = { title: 'Nutrition plan' };
 
@@ -112,15 +117,56 @@ export default async function NutritionPlanPage({ params }: { params: Promise<{ 
         </div>
       </section>
 
+      {/* Plan rename */}
+      <section style={{ marginBottom: 32 }}>
+        <div className="kicker" style={{ marginBottom: 12 }}>[ {t('nutritionPlans.name')} ]</div>
+        <form action={asFormAction(updateNutritionPlanAction)} className="form-row" style={{ maxWidth: 500 }}>
+          <input type="hidden" name="id" value={plan.id} />
+          <label className="field grow">
+            <input name="name" defaultValue={plan.name} required maxLength={120} />
+          </label>
+          <button className="btn sm" style={{ alignSelf: 'flex-end' }}>{t('nutritionPlans.saveName')}</button>
+        </form>
+      </section>
+
       {/* Prep sessions */}
       <section>
         <div className="kicker" style={{ marginBottom: 12 }}>[ {t('nutritionPlans.prepSessions')} ]</div>
         {plan.prepSessions.length === 0 ? (
           <div className="small dim">{t('nutritionPlans.noPrepSessions')}</div>
         ) : (
-          <div className="col" style={{ gap: 10, maxWidth: 600 }}>
+          <div className="col" style={{ gap: 24, maxWidth: 600 }}>
             {plan.prepSessions.map((session) => (
-              <PrepSessionChecklist key={session.id} session={session} dayNames={dayNames} />
+              <div key={session.id} className="col" style={{ gap: 10 }}>
+                <PrepSessionChecklist session={session} dayNames={dayNames} />
+                <details className="panel" style={{ padding: '10px 14px' }}>
+                  <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--violet-3)', fontSize: '0.86rem' }}>
+                    {t('nutritionPlans.editPrepSession')}
+                  </summary>
+                  <form action={asFormAction(updatePrepSessionAction)} className="col" style={{ marginTop: 12, gap: 10 }}>
+                    <input type="hidden" name="id" value={session.id} />
+                    <label className="field">
+                      {t('nutritionPlans.name')}
+                      <input name="name" defaultValue={session.name} required maxLength={120} />
+                    </label>
+                    <label className="field">
+                      {t('nutritionPlans.cookOn')}
+                      <select name="cookWeekday" defaultValue={session.cookWeekday}>
+                        {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                          <option key={d} value={d}>{dayNames[d]}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      {t('nutritionPlans.notesMarkdown')}
+                      <textarea name="notes" defaultValue={session.notes} maxLength={2000} rows={6} style={{ resize: 'vertical', fontFamily: 'var(--font-mono, monospace)', fontSize: '0.86rem' }} />
+                    </label>
+                    <div>
+                      <button className="btn sm primary">{t('nutritionPlans.saveSession')}</button>
+                    </div>
+                  </form>
+                </details>
+              </div>
             ))}
           </div>
         )}

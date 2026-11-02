@@ -352,7 +352,11 @@
     "importDay": "Import to log",
     "todayPrepSession": "Today's prep session",
     "noActivePlan": "No active nutrition plan.",
-    "backToPlans": "← Back to plans"
+    "backToPlans": "← Back to plans",
+    "editPrepSession": "Edit prep session",
+    "notesMarkdown": "Notes (markdown supported)",
+    "saveName": "Rename",
+    "saveSession": "Save session"
   },
   "weekdays": {
     "mon": "Mon",

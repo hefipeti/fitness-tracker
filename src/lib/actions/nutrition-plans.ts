@@ -76,7 +76,7 @@ export async function createPrepSessionAction(fd: FormData): Promise<ActionError
     const weekday = requireWeekday(fd, 'cookWeekday');
     await q(
       'INSERT INTO nutrition_plan_prep_sessions (plan_id, user_id, name, cook_weekday, notes) VALUES ($1,$2,$3,$4,$5)',
-      [planId, uid, reqStr(fd, 'name', 120), weekday, fdStr(fd, 'notes').slice(0, 500)],
+      [planId, uid, reqStr(fd, 'name', 120), weekday, fdStr(fd, 'notes').slice(0, 2000)],
     );
     touch();
   });
@@ -90,7 +90,7 @@ export async function updatePrepSessionAction(fd: FormData): Promise<ActionError
     const weekday = requireWeekday(fd, 'cookWeekday');
     await q(
       'UPDATE nutrition_plan_prep_sessions SET name = $3, cook_weekday = $4, notes = $5 WHERE id = $1 AND user_id = $2',
-      [sessionId, uid, reqStr(fd, 'name', 120), weekday, fdStr(fd, 'notes').slice(0, 500)],
+      [sessionId, uid, reqStr(fd, 'name', 120), weekday, fdStr(fd, 'notes').slice(0, 2000)],
     );
     touch();
   });

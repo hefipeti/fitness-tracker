@@ -352,7 +352,11 @@
     "importDay": "Importál a naplóba",
     "todayPrepSession": "Mai főzési session",
     "noActivePlan": "Nincs aktív étkezési terv.",
-    "backToPlans": "← Vissza a tervekhez"
+    "backToPlans": "← Vissza a tervekhez",
+    "editPrepSession": "Főzési session szerkesztése",
+    "notesMarkdown": "Megjegyzések (markdown támogatással)",
+    "saveName": "Átnevez",
+    "saveSession": "Session mentése"
   },
   "weekdays": {
     "mon": "H",

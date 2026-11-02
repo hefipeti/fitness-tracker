@@ -401,3 +401,17 @@ details.fold[open] > summary { margin-bottom: 10px; }
 .ss-opt:hover { background: rgba(139, 92, 246, 0.1); color: #fff; }
 .ss-opt.on { background: rgba(139, 92, 246, 0.18); color: var(--violet-3); }
 .ss-empty { padding: 10px 12px; color: var(--dim); font-size: 0.86rem; }
+
+/* ---------- Prep notes markdown ---------- */
+.prep-notes { color: var(--muted); line-height: 1.6; }
+.prep-notes p { margin: 0 0 6px; }
+.prep-notes p:last-child { margin-bottom: 0; }
+.prep-notes h1, .prep-notes h2, .prep-notes h3 { color: var(--text); font-size: 0.9rem; font-weight: 700; margin: 10px 0 4px; }
+.prep-notes strong { color: var(--text); font-weight: 700; }
+.prep-notes em { font-style: italic; }
+.prep-notes a { color: var(--violet-3); text-decoration: underline; }
+.prep-notes a:hover { color: var(--violet-2); }
+.prep-notes ul, .prep-notes ol { margin: 0 0 6px; padding-left: 20px; display: flex; flex-direction: column; gap: 2px; }
+.prep-notes code { font-family: var(--font-mono, monospace); font-size: 0.85em; background: rgba(139,92,246,0.1); border-radius: 3px; padding: 1px 4px; color: var(--violet-3); }
+.prep-notes pre { background: rgba(0,0,0,0.3); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; overflow-x: auto; margin: 0 0 6px; }
+.prep-notes pre code { background: none; padding: 0; }

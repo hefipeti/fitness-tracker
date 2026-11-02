@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
 import { PageHead, Panel } from '@/components/ui';
 import { listNutritionPlans } from '@/lib/queries';
-import { activateNutritionPlanAction, createNutritionPlanAction, deleteNutritionPlanAction } from '@/lib/actions/nutrition-plans';
+import { activateNutritionPlanAction, createNutritionPlanAction, deleteNutritionPlanAction, updateNutritionPlanAction } from '@/lib/actions/nutrition-plans';
 import { getTranslations } from 'next-intl/server';
 import type { ActionError } from '@/lib/types';
 
@@ -37,6 +37,14 @@ export default async function NutritionPlansPage() {
                 title={plan.name}
                 action={plan.active ? <span className="badge on">{t('nutritionPlans.active')}</span> : undefined}
               >
+                <form action={asFormAction(updateNutritionPlanAction)} className="form-row" style={{ marginTop: 8 }}>
+                  <input type="hidden" name="id" value={plan.id} />
+                  <label className="field grow">
+                    {t('nutritionPlans.name')}
+                    <input name="name" defaultValue={plan.name} required maxLength={120} />
+                  </label>
+                  <button className="btn sm" style={{ alignSelf: 'flex-end' }}>{t('nutritionPlans.saveName')}</button>
+                </form>
                 <div className="row wrap" style={{ gap: 8, marginTop: 8 }}>
                   <Link className="btn sm primary" href={`/food/plans/${plan.id}`}>
                     {t('nutritionPlans.viewPlan')}
