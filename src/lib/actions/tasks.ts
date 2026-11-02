@@ -57,7 +57,7 @@ export async function toggleTaskAction(taskId: number): Promise<GameResult | Act
         let next = addDays(t.dueDate ?? today, step);
         while (next <= today) next = addDays(next, step);
         const dup = await q1(
-          'SELECT 1 FROM tasks WHERE user_id = $1 AND title = $2 AND due_date = $3 AND done_at IS NULL',
+          'SELECT 1 FROM tasks WHERE user_id = $1 AND title = $2 AND due_date = $3 AND done_at IS NULL AND deleted_at IS NULL',
           [uid, t.title, next],
           c,
         );
@@ -74,6 +74,6 @@ export async function toggleTaskAction(taskId: number): Promise<GameResult | Act
 
 export async function deleteTaskAction(fd: FormData): Promise<void> {
   const uid = await requireUserId();
-  await q('DELETE FROM tasks WHERE id = $1 AND user_id = $2', [reqInt(fd, 'id'), uid]);
+  await q('UPDATE tasks SET deleted_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [reqInt(fd, 'id'), uid]);
   touch();
 }

@@ -119,7 +119,7 @@ export async function deleteFoodLogAction(logId: number): Promise<GameResult | A
   const uid = await requireUserId();
   return guard(async () => {
     const before = await totalXp(uid);
-    const row = await q1<{ log_date: string }>('DELETE FROM food_logs WHERE id = $1 AND user_id = $2 RETURNING log_date', [logId, uid]);
+    const row = await q1<{ log_date: string }>('UPDATE food_logs SET deleted_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL RETURNING log_date', [logId, uid]);
     if (row) await evaluateFoodDay(uid, row.log_date);
     touch();
     return settle(uid, before);
@@ -137,7 +137,7 @@ export async function logWeightAction(fd: FormData): Promise<GameResult | Action
     const before = await totalXp(uid);
     await q(
       `INSERT INTO body_weights (user_id, log_date, kg) VALUES ($1,$2,$3)
-       ON CONFLICT (user_id, log_date) DO UPDATE SET kg = EXCLUDED.kg`,
+       ON CONFLICT (user_id, log_date) WHERE deleted_at IS NULL DO UPDATE SET kg = EXCLUDED.kg`,
       [uid, date, Math.round(kg * 10) / 10],
     );
     await addXp(uid, 'weight', date, `Weigh-in: ${kg} kg`, WEIGHT_LOG_XP, date);
@@ -149,6 +149,6 @@ export async function logWeightAction(fd: FormData): Promise<GameResult | Action
 export async function deleteWeightAction(fd: FormData): Promise<void> {
   const uid = await requireUserId();
   const date = fdStr(fd, 'date');
-  if (isValidDate(date)) await q('DELETE FROM body_weights WHERE user_id = $1 AND log_date = $2', [uid, date]);
+  if (isValidDate(date)) await q('UPDATE body_weights SET deleted_at = now() WHERE user_id = $1 AND log_date = $2 AND deleted_at IS NULL', [uid, date]);
   touch();
 }

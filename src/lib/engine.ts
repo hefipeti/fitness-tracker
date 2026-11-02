@@ -45,10 +45,10 @@ export async function removeXp(uid: number, source: string, ref: string, c?: Que
 export async function getAggregate(uid: number): Promise<Aggregate> {
   const today = todayStr();
   const [sess, weekBest, ex, food, tasks, active, settings, wt, xp] = await Promise.all([
-    q1<{ c: number }>('SELECT count(*)::int AS c FROM sessions WHERE user_id = $1 AND completed_at IS NOT NULL', [uid]),
+    q1<{ c: number }>('SELECT count(*)::int AS c FROM sessions WHERE user_id = $1 AND completed_at IS NOT NULL AND deleted_at IS NULL', [uid]),
     q1<{ m: number }>(
       `SELECT COALESCE(max(c), 0)::int AS m FROM
-         (SELECT count(*) AS c FROM sessions WHERE user_id = $1 AND completed_at IS NOT NULL
+         (SELECT count(*) AS c FROM sessions WHERE user_id = $1 AND completed_at IS NOT NULL AND deleted_at IS NULL
           GROUP BY date_trunc('week', session_date)) t`,
       [uid],
     ),
@@ -61,25 +61,26 @@ export async function getAggregate(uid: number): Promise<Aggregate> {
               COALESCE(max(s.reps), 0)::int AS "maxReps",
               COALESCE(max(s.seconds), 0)::int AS "maxSeconds"
        FROM session_sets s
-       JOIN sessions se ON se.id = s.session_id AND se.completed_at IS NOT NULL AND se.user_id = $1
+       JOIN sessions se ON se.id = s.session_id AND se.completed_at IS NOT NULL AND se.user_id = $1 AND se.deleted_at IS NULL
        JOIN exercises ex ON ex.id = s.exercise_id
+       WHERE s.deleted_at IS NULL
        GROUP BY ex.slug, ex.category, ex.mode`,
       [uid],
     ),
     q1<{ c: number }>("SELECT count(*)::int AS c FROM xp_events WHERE user_id = $1 AND source = 'food'", [uid]),
-    q1<{ c: number }>('SELECT count(*)::int AS c FROM tasks WHERE user_id = $1 AND done_at IS NOT NULL', [uid]),
+    q1<{ c: number }>('SELECT count(*)::int AS c FROM tasks WHERE user_id = $1 AND done_at IS NOT NULL AND deleted_at IS NULL', [uid]),
     q<{ d: string }>(
       `SELECT d FROM (
-         SELECT session_date AS d FROM sessions WHERE user_id = $1 AND completed_at IS NOT NULL
-         UNION SELECT log_date FROM food_logs WHERE user_id = $1
+         SELECT session_date AS d FROM sessions WHERE user_id = $1 AND completed_at IS NOT NULL AND deleted_at IS NULL
+         UNION SELECT log_date FROM food_logs WHERE user_id = $1 AND deleted_at IS NULL
        ) t ORDER BY d DESC LIMIT 400`,
       [uid],
     ),
     getSettings(uid),
     q1<{ mn: number | null; first: number | null }>(
       `SELECT min(kg) AS mn,
-              (SELECT kg FROM body_weights WHERE user_id = $1 ORDER BY log_date LIMIT 1) AS first
-       FROM body_weights WHERE user_id = $1`,
+              (SELECT kg FROM body_weights WHERE user_id = $1 AND deleted_at IS NULL ORDER BY log_date LIMIT 1) AS first
+       FROM body_weights WHERE user_id = $1 AND deleted_at IS NULL`,
       [uid],
     ),
     totalXp(uid),
@@ -147,7 +148,7 @@ export async function evaluateFoodDay(uid: number, date: string): Promise<void> 
     q1<DayTotals>(
       `SELECT COALESCE(sum(kcal),0)::numeric AS kcal, COALESCE(sum(protein),0)::numeric AS protein,
               COALESCE(sum(carbs),0)::numeric AS carbs, COALESCE(sum(fat),0)::numeric AS fat
-       FROM food_logs WHERE user_id = $1 AND log_date = $2`,
+       FROM food_logs WHERE user_id = $1 AND log_date = $2 AND deleted_at IS NULL`,
       [uid, date],
     ),
     getSettings(uid),

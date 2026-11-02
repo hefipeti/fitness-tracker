@@ -7,12 +7,12 @@ import { UserError } from './action-utils';
  */
 
 export async function assertPlan(uid: number, planId: number, c?: Queryable): Promise<void> {
-  if (!(await q1('SELECT 1 FROM plans WHERE id = $1 AND user_id = $2', [planId, uid], c))) throw new UserError('Plan not found');
+  if (!(await q1('SELECT 1 FROM plans WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [planId, uid], c))) throw new UserError('Plan not found');
 }
 
 export async function assertPlanDay(uid: number, dayId: number, c?: Queryable): Promise<void> {
   const row = await q1(
-    'SELECT 1 FROM plan_days d JOIN plans p ON p.id = d.plan_id WHERE d.id = $1 AND p.user_id = $2',
+    'SELECT 1 FROM plan_days d JOIN plans p ON p.id = d.plan_id WHERE d.id = $1 AND p.user_id = $2 AND d.deleted_at IS NULL AND p.deleted_at IS NULL',
     [dayId, uid],
     c,
   );
@@ -22,7 +22,7 @@ export async function assertPlanDay(uid: number, dayId: number, c?: Queryable): 
 export async function assertPlanExercise(uid: number, id: number, c?: Queryable): Promise<void> {
   const row = await q1(
     `SELECT 1 FROM plan_exercises e JOIN plan_days d ON d.id = e.plan_day_id JOIN plans p ON p.id = d.plan_id
-     WHERE e.id = $1 AND p.user_id = $2`,
+     WHERE e.id = $1 AND p.user_id = $2 AND e.deleted_at IS NULL AND d.deleted_at IS NULL AND p.deleted_at IS NULL`,
     [id, uid],
     c,
   );
@@ -31,7 +31,7 @@ export async function assertPlanExercise(uid: number, id: number, c?: Queryable)
 
 export async function assertPlanExerciseBelongsToPlan(planExerciseId: number, planId: number, c?: Queryable): Promise<void> {
   const row = await q1(
-    `SELECT 1 FROM plan_exercises pe JOIN plan_days pd ON pd.id = pe.plan_day_id WHERE pe.id = $1 AND pd.plan_id = $2`,
+    `SELECT 1 FROM plan_exercises pe JOIN plan_days pd ON pd.id = pe.plan_day_id WHERE pe.id = $1 AND pd.plan_id = $2 AND pe.deleted_at IS NULL AND pd.deleted_at IS NULL`,
     [planExerciseId, planId],
     c,
   );
@@ -57,7 +57,7 @@ export async function assertFoodVisible(uid: number, foodId: number, c?: Queryab
 }
 
 export async function assertNutritionPlan(uid: number, planId: number, c?: Queryable): Promise<void> {
-  if (!(await q1('SELECT 1 FROM nutrition_plans WHERE id = $1 AND user_id = $2', [planId, uid], c)))
+  if (!(await q1('SELECT 1 FROM nutrition_plans WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [planId, uid], c)))
     throw new UserError('Nutrition plan not found');
 }
 
@@ -65,7 +65,7 @@ export async function assertPrepSession(uid: number, sessionId: number, c?: Quer
   const row = await q1(
     `SELECT 1 FROM nutrition_plan_prep_sessions s
      JOIN nutrition_plans p ON p.id = s.plan_id
-     WHERE s.id = $1 AND p.user_id = $2`,
+     WHERE s.id = $1 AND p.user_id = $2 AND s.deleted_at IS NULL AND p.deleted_at IS NULL`,
     [sessionId, uid],
     c,
   );

@@ -21,13 +21,13 @@ export async function startSessionAction(fd: FormData): Promise<void> {
   const id = await tx(async (c) => {
     if (planDayId != null) {
       const day = await q1<{ id: number; name: string }>(
-        'SELECT d.id, d.name FROM plan_days d JOIN plans p ON p.id = d.plan_id WHERE d.id = $1 AND p.user_id = $2',
+        'SELECT d.id, d.name FROM plan_days d JOIN plans p ON p.id = d.plan_id WHERE d.id = $1 AND p.user_id = $2 AND d.deleted_at IS NULL AND p.deleted_at IS NULL',
         [planDayId, uid],
         c,
       );
       if (!day) throw new Error('Plan day not found');
       const existing = await q1<{ id: number }>(
-        `SELECT id FROM sessions WHERE user_id = $1 AND plan_day_id = $2 AND session_date = $3 AND completed_at IS NULL
+        `SELECT id FROM sessions WHERE user_id = $1 AND plan_day_id = $2 AND session_date = $3 AND completed_at IS NULL AND deleted_at IS NULL
          ORDER BY id LIMIT 1`,
         [uid, planDayId, date],
         c,
@@ -84,7 +84,7 @@ export async function logSetAction(input: z.input<typeof logSetSchema>): Promise
       await q(
         `INSERT INTO session_sets (session_id, exercise_id, set_no, reps, seconds, weight_kg)
          VALUES ($1,$2,$3,$4,$5,$6)
-         ON CONFLICT (session_id, exercise_id, set_no)
+         ON CONFLICT (session_id, exercise_id, set_no) WHERE deleted_at IS NULL
          DO UPDATE SET reps = EXCLUDED.reps, seconds = EXCLUDED.seconds, weight_kg = EXCLUDED.weight_kg`,
         [v.sessionId, v.exerciseId, v.setNo, v.reps, v.seconds, v.weightKg],
         c,
@@ -98,8 +98,9 @@ export async function removeSetAction(input: { sessionId: number; exerciseId: nu
   return guard(async () => {
     const v = z.object({ sessionId: z.number().int(), exerciseId: z.number().int(), setNo: z.number().int() }).parse(input);
     await q(
-      `DELETE FROM session_sets WHERE session_id = $1 AND exercise_id = $2 AND set_no = $3
-         AND EXISTS (SELECT 1 FROM sessions WHERE id = $1 AND user_id = $4 AND completed_at IS NULL)`,
+      `UPDATE session_sets SET deleted_at = now()
+       WHERE session_id = $1 AND exercise_id = $2 AND set_no = $3 AND deleted_at IS NULL
+         AND EXISTS (SELECT 1 FROM sessions WHERE id = $1 AND user_id = $4 AND completed_at IS NULL AND deleted_at IS NULL)`,
       [v.sessionId, v.exerciseId, v.setNo, uid],
     );
   });
@@ -119,7 +120,7 @@ export async function addSessionExerciseAction(fd: FormData): Promise<void> {
     );
     if (!s || s.completed_at) throw new Error('Session not editable');
     await assertExerciseVisible(uid, exerciseId, c);
-    const dup = await q1('SELECT 1 FROM session_exercises WHERE session_id = $1 AND exercise_id = $2', [sessionId, exerciseId], c);
+    const dup = await q1('SELECT 1 FROM session_exercises WHERE session_id = $1 AND exercise_id = $2 AND deleted_at IS NULL', [sessionId, exerciseId], c);
     if (dup) return;
     await q(
       `INSERT INTO session_exercises (session_id, exercise_id, position, target_sets, target_reps)
@@ -142,8 +143,8 @@ export async function removeSessionExerciseAction(fd: FormData): Promise<void> {
       c,
     );
     if (!s || s.completed_at) throw new Error('Session not editable');
-    await q('DELETE FROM session_sets WHERE session_id = $1 AND exercise_id = $2', [sessionId, exerciseId], c);
-    await q('DELETE FROM session_exercises WHERE session_id = $1 AND exercise_id = $2', [sessionId, exerciseId], c);
+    await q('UPDATE session_sets SET deleted_at = now() WHERE session_id = $1 AND exercise_id = $2 AND deleted_at IS NULL', [sessionId, exerciseId], c);
+    await q('UPDATE session_exercises SET deleted_at = now() WHERE session_id = $1 AND exercise_id = $2 AND deleted_at IS NULL', [sessionId, exerciseId], c);
   });
   touch();
 }
@@ -173,7 +174,7 @@ export async function completeSessionAction(sessionId: number): Promise<GameResu
 
       const sets = await q<SetRow>(
         `SELECT s.exercise_id AS "exerciseId", ex.mode, s.reps, s.seconds, s.weight_kg AS "weightKg"
-         FROM session_sets s JOIN exercises ex ON ex.id = s.exercise_id WHERE s.session_id = $1`,
+         FROM session_sets s JOIN exercises ex ON ex.id = s.exercise_id WHERE s.session_id = $1 AND s.deleted_at IS NULL`,
         [id],
         c,
       );
@@ -183,9 +184,9 @@ export async function completeSessionAction(sessionId: number): Promise<GameResu
       const prior = await q<SetRow>(
         `SELECT s.exercise_id AS "exerciseId", ex.mode, s.reps, s.seconds, s.weight_kg AS "weightKg"
          FROM session_sets s
-         JOIN sessions se ON se.id = s.session_id AND se.user_id = $3 AND se.completed_at IS NOT NULL AND se.id <> $1
+         JOIN sessions se ON se.id = s.session_id AND se.user_id = $3 AND se.completed_at IS NOT NULL AND se.deleted_at IS NULL AND se.id <> $1
          JOIN exercises ex ON ex.id = s.exercise_id
-         WHERE s.exercise_id = ANY($2::int[])`,
+         WHERE s.exercise_id = ANY($2::int[]) AND s.deleted_at IS NULL`,
         [id, exIds, uid],
         c,
       );
@@ -217,8 +218,12 @@ export async function deleteSessionAction(fd: FormData): Promise<void> {
   const uid = await requireUserId();
   const id = reqInt(fd, 'sessionId');
   await tx(async (c) => {
-    const del = await q('DELETE FROM sessions WHERE id = $1 AND user_id = $2 RETURNING id', [id, uid], c);
-    if (del.length > 0) await removeXp(uid, 'workout', `session:${id}`, c);
+    const del = await q('UPDATE sessions SET deleted_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL RETURNING id', [id, uid], c);
+    if (del.length > 0) {
+      await q('UPDATE session_exercises SET deleted_at = now() WHERE session_id = $1 AND deleted_at IS NULL', [id], c);
+      await q('UPDATE session_sets SET deleted_at = now() WHERE session_id = $1 AND deleted_at IS NULL', [id], c);
+      await removeXp(uid, 'workout', `session:${id}`, c);
+    }
   });
   touch();
   redirect('/training');

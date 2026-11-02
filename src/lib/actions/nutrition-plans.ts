@@ -1,6 +1,6 @@
 'use server';
 
-import { q, q1 } from '../db';
+import { q, q1, tx } from '../db';
 import { requireUserId } from '../auth';
 import { UserError, fdInt, fdNum, fdStr, guard, reqInt, reqStr, touch } from '../action-utils';
 import { assertFoodVisible, assertNutritionPlan, assertPrepSession } from '../ownership';
@@ -43,7 +43,16 @@ export async function deleteNutritionPlanAction(fd: FormData): Promise<ActionErr
   return guard(async () => {
     const planId = reqInt(fd, 'id');
     await assertNutritionPlan(uid, planId);
-    await q('DELETE FROM nutrition_plans WHERE id = $1 AND user_id = $2', [planId, uid]);
+    await tx(async (c) => {
+      await q(
+        `UPDATE nutrition_plan_prep_foods SET deleted_at = now()
+         WHERE deleted_at IS NULL AND prep_session_id IN (SELECT id FROM nutrition_plan_prep_sessions WHERE plan_id = $1)`,
+        [planId], c,
+      );
+      await q('UPDATE nutrition_plan_prep_sessions SET deleted_at = now() WHERE plan_id = $1 AND deleted_at IS NULL', [planId], c);
+      await q('UPDATE nutrition_plan_day_meals SET deleted_at = now() WHERE plan_id = $1 AND deleted_at IS NULL', [planId], c);
+      await q('UPDATE nutrition_plans SET deleted_at = now(), active = FALSE WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [planId, uid], c);
+    });
     touch();
   });
 }
@@ -92,7 +101,10 @@ export async function deletePrepSessionAction(fd: FormData): Promise<ActionError
   return guard(async () => {
     const sessionId = reqInt(fd, 'id');
     await assertPrepSession(uid, sessionId);
-    await q('DELETE FROM nutrition_plan_prep_sessions WHERE id = $1', [sessionId]);
+    await tx(async (c) => {
+      await q('UPDATE nutrition_plan_prep_foods SET deleted_at = now() WHERE prep_session_id = $1 AND deleted_at IS NULL', [sessionId], c);
+      await q('UPDATE nutrition_plan_prep_sessions SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL', [sessionId], c);
+    });
     touch();
   });
 }
@@ -121,11 +133,11 @@ export async function removePrepFoodAction(fd: FormData): Promise<ActionError | 
       `SELECT 1 FROM nutrition_plan_prep_foods pf
        JOIN nutrition_plan_prep_sessions s ON s.id = pf.prep_session_id
        JOIN nutrition_plans p ON p.id = s.plan_id
-       WHERE pf.id = $1 AND p.user_id = $2`,
+       WHERE pf.id = $1 AND p.user_id = $2 AND pf.deleted_at IS NULL AND s.deleted_at IS NULL AND p.deleted_at IS NULL`,
       [id, uid],
     );
     if (!row) throw new UserError('Prep food not found');
-    await q('DELETE FROM nutrition_plan_prep_foods WHERE id = $1', [id]);
+    await q('UPDATE nutrition_plan_prep_foods SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL', [id]);
     touch();
   });
 }
@@ -156,7 +168,7 @@ export async function removePlannedMealAction(fd: FormData): Promise<ActionError
   const uid = await requireUserId();
   return guard(async () => {
     const id = reqInt(fd, 'id');
-    const row = await q1('DELETE FROM nutrition_plan_day_meals WHERE id = $1 AND user_id = $2 RETURNING id', [id, uid]);
+    const row = await q1('UPDATE nutrition_plan_day_meals SET deleted_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL RETURNING id', [id, uid]);
     if (!row) throw new UserError('Planned meal not found');
     touch();
   });
@@ -173,11 +185,11 @@ export async function importPlanDayAction(fd: FormData): Promise<ActionError | {
     const mode = fdStr(fd, 'mode');
     const weekday = isoWeekday(date);
 
-    const plan = await q1<{ id: number }>('SELECT id FROM nutrition_plans WHERE user_id = $1 AND active = TRUE', [uid]);
+    const plan = await q1<{ id: number }>('SELECT id FROM nutrition_plans WHERE user_id = $1 AND active = TRUE AND deleted_at IS NULL', [uid]);
     if (!plan) throw new UserError('No active nutrition plan');
 
     const existing = await q1<{ c: number }>(
-      'SELECT count(*)::int AS c FROM food_logs WHERE user_id = $1 AND log_date = $2',
+      'SELECT count(*)::int AS c FROM food_logs WHERE user_id = $1 AND log_date = $2 AND deleted_at IS NULL',
       [uid, date],
     );
     if ((existing?.c ?? 0) > 0 && !mode) return { conflict: true } as { conflict: true };
@@ -188,12 +200,12 @@ export async function importPlanDayAction(fd: FormData): Promise<ActionError | {
               f.carbs::float AS carbs, f.fat::float AS fat
        FROM nutrition_plan_day_meals dm
        JOIN foods f ON f.id = dm.food_id
-       WHERE dm.plan_id = $1 AND dm.weekday = $2`,
+       WHERE dm.plan_id = $1 AND dm.weekday = $2 AND dm.deleted_at IS NULL`,
       [plan.id, weekday],
     );
 
     if (mode === 'replace') {
-      await q('DELETE FROM food_logs WHERE user_id = $1 AND log_date = $2', [uid, date]);
+      await q('UPDATE food_logs SET deleted_at = now() WHERE user_id = $1 AND log_date = $2 AND deleted_at IS NULL', [uid, date]);
     }
 
     for (const m of meals) {

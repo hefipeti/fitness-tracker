@@ -160,9 +160,9 @@ CREATE TABLE achievements (
 
 async function seed(c: PoolClient): Promise<void> {
   await c.query(
-    `INSERT INTO settings (id, hunter_name, kcal_target, protein_target, carbs_target, fat_target, start_weight, goal_weight, height_cm)
-     VALUES (1, 'Peti', 2300, 160, 250, 70, 94.0, 86.0, 182)
-     ON CONFLICT (id) DO NOTHING`,
+    `INSERT INTO settings (hunter_name, kcal_target, protein_target, carbs_target, fat_target, start_weight, goal_weight, height_cm)
+     VALUES ('Peti', 2300, 160, 250, 70, 94.0, 86.0, 182)
+     ON CONFLICT DO NOTHING`,
   );
 
   for (const [slug, name, category, mode] of BASE_EXERCISES) {
@@ -266,7 +266,7 @@ ALTER TABLE achievements ADD COLUMN user_id INT REFERENCES users(id) ON DELETE C
 ALTER TABLE achievements DROP CONSTRAINT IF EXISTS achievements_pkey;
 CREATE UNIQUE INDEX achievements_user_key ON achievements (user_id, key);
 
-ALTER TABLE settings DROP COLUMN id;
+ALTER TABLE settings DROP COLUMN IF EXISTS id;
 ALTER TABLE settings ADD COLUMN user_id INT REFERENCES users(id) ON DELETE CASCADE;
 CREATE UNIQUE INDEX settings_user ON settings (user_id);
 `;
@@ -359,6 +359,41 @@ const MIGRATIONS: Migration[] = [
   { id: 7, name: 'weekly nutrition plans with prep sessions', up: async (c) => void (await c.query(NUTRITION_PLANS)) },
   { id: 8, name: 'locale preference', up: async (c) => void (await c.query(`ALTER TABLE settings ADD COLUMN locale TEXT NOT NULL DEFAULT 'en' CHECK (locale IN ('en', 'hu'))`)) },
   { id: 9, name: 'exercise description', up: async (c) => void (await c.query(`ALTER TABLE exercises ADD COLUMN description TEXT NOT NULL DEFAULT ''`)) },
+  {
+    id: 13,
+    name: 'soft deletes',
+    up: async (c) => {
+      await c.query(`
+        ALTER TABLE plans ADD COLUMN deleted_at TIMESTAMPTZ;
+        ALTER TABLE plan_days ADD COLUMN deleted_at TIMESTAMPTZ;
+        ALTER TABLE plan_exercises ADD COLUMN deleted_at TIMESTAMPTZ;
+        ALTER TABLE sessions ADD COLUMN deleted_at TIMESTAMPTZ;
+        ALTER TABLE session_exercises ADD COLUMN deleted_at TIMESTAMPTZ;
+        ALTER TABLE session_sets ADD COLUMN deleted_at TIMESTAMPTZ;
+        ALTER TABLE food_logs ADD COLUMN deleted_at TIMESTAMPTZ;
+        ALTER TABLE body_weights ADD COLUMN deleted_at TIMESTAMPTZ;
+        ALTER TABLE tasks ADD COLUMN deleted_at TIMESTAMPTZ;
+        ALTER TABLE nutrition_plans ADD COLUMN deleted_at TIMESTAMPTZ;
+        ALTER TABLE nutrition_plan_prep_sessions ADD COLUMN deleted_at TIMESTAMPTZ;
+        ALTER TABLE nutrition_plan_prep_foods ADD COLUMN deleted_at TIMESTAMPTZ;
+        ALTER TABLE nutrition_plan_day_meals ADD COLUMN deleted_at TIMESTAMPTZ;
+        ALTER TABLE plan_shares ADD COLUMN deleted_at TIMESTAMPTZ;
+
+        DROP INDEX plans_one_active;
+        CREATE UNIQUE INDEX plans_one_active ON plans (user_id) WHERE active AND deleted_at IS NULL;
+
+        DROP INDEX nutrition_plans_one_active;
+        CREATE UNIQUE INDEX nutrition_plans_one_active ON nutrition_plans (user_id) WHERE active AND deleted_at IS NULL;
+
+        DROP INDEX IF EXISTS body_weights_user_date;
+        CREATE UNIQUE INDEX body_weights_user_date ON body_weights (user_id, log_date) WHERE deleted_at IS NULL;
+
+        ALTER TABLE session_sets DROP CONSTRAINT IF EXISTS session_sets_session_id_exercise_id_set_no_key;
+        DROP INDEX IF EXISTS session_sets_uniq;
+        CREATE UNIQUE INDEX session_sets_uniq ON session_sets (session_id, exercise_id, set_no) WHERE deleted_at IS NULL;
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

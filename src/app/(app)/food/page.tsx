@@ -3,13 +3,14 @@ import { requireUser } from '@/lib/auth';
 import { Bar, PageHead, Panel, fmtNum } from '@/components/ui';
 import { RunButton, RunForm } from '@/components/system';
 import { SearchableSelect } from '@/components/searchable-select';
-import { getFoodDay, listFoods } from '@/lib/queries';
+import { getFoodDay, listFoods, getActiveNutritionPlan } from '@/lib/queries';
 import { getSettings } from '@/lib/settings';
-import { addDays, formatDay, isValidDate, todayStr } from '@/lib/dates';
+import { addDays, formatDay, isValidDate, isoWeekday, todayStr } from '@/lib/dates';
 import { foodGoalMet } from '@/lib/game';
 import { deleteFoodLogAction, logFoodAction, quickLogAction } from '@/lib/actions/food';
 import { MEALS } from '@/lib/types';
 import { getTranslations } from 'next-intl/server';
+import { PrepSessionChecklist } from '@/components/prep-session-checklist';
 
 export const metadata = { title: 'Nutrition' };
 
@@ -18,10 +19,11 @@ export default async function FoodPage({ searchParams }: { searchParams: Promise
   const sp = await searchParams;
   const today = todayStr();
   const date = isValidDate(sp.date) ? sp.date : today;
-  const [day, foods, settings, t] = await Promise.all([
+  const [day, foods, settings, activePlan, t] = await Promise.all([
     getFoodDay(uid, date),
     listFoods(uid),
     getSettings(uid),
+    getActiveNutritionPlan(uid),
     getTranslations(),
   ]);
   const totals = day.totals;
@@ -59,6 +61,9 @@ export default async function FoodPage({ searchParams }: { searchParams: Promise
           </div>
           <Link className="btn" href="/food/library">
             {t('food.library')}
+          </Link>
+          <Link className="btn ghost" href="/food/plans">
+            {t('nutritionPlans.managePlans')}
           </Link>
         </div>
       </PageHead>
@@ -208,6 +213,33 @@ export default async function FoodPage({ searchParams }: { searchParams: Promise
           </Panel>
         </div>
       </div>
+
+      {/* Active nutrition plan — today's prep session */}
+      {activePlan && (() => {
+        const todayWd = isoWeekday(date);
+        const todayPrep = activePlan.prepSessions.find((s) => s.cookWeekday === todayWd);
+        const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+        const dayNames: Record<number, string> = {};
+        for (let i = 0; i < 7; i++) {
+          dayNames[i + 1] = t(`weekdays.${WEEKDAY_KEYS[i]}`);
+        }
+
+        return (
+          <section style={{ marginTop: 32 }}>
+            <div className="row between" style={{ marginBottom: 12 }}>
+              <div className="kicker">[ {t('nutritionPlans.title')} · {activePlan.name} ]</div>
+              <Link className="btn sm ghost" href={`/food/plans/${activePlan.id}`}>
+                {t('nutritionPlans.viewPlan')}
+              </Link>
+            </div>
+            {todayPrep ? (
+              <PrepSessionChecklist session={todayPrep} dayNames={dayNames} />
+            ) : (
+              <div className="small dim">{t('nutritionPlans.todayPrepSession')}: —</div>
+            )}
+          </section>
+        );
+      })()}
     </>
   );
 }

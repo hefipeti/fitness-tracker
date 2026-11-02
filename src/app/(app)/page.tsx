@@ -8,11 +8,13 @@ import {
   getHunterFull,
   getScheduledDays,
   getWeek,
+  getActiveNutritionPlan,
   listSessionsOn,
   listTasksDueBy,
   listWeights,
   listXpEvents,
 } from '@/lib/queries';
+import type { DayMeal } from '@/lib/queries';
 import { getSettings } from '@/lib/settings';
 import { formatDay, todayStr } from '@/lib/dates';
 import { STAT_INFO, type Stats } from '@/lib/game';
@@ -24,7 +26,7 @@ import { getTranslations } from 'next-intl/server';
 export default async function StatusPage() {
   const { id: uid } = await requireUser();
   const today = todayStr();
-  const [hunter, settings, scheduled, sessions, week, dueTasks, food, events, weights, t] = await Promise.all([
+  const [hunter, settings, scheduled, sessions, week, dueTasks, food, events, weights, activePlan, t] = await Promise.all([
     getHunterFull(uid),
     getSettings(uid),
     getScheduledDays(uid, today),
@@ -34,8 +36,20 @@ export default async function StatusPage() {
     getFoodDay(uid, today),
     listXpEvents(uid, 8),
     listWeights(uid, 1),
+    getActiveNutritionPlan(uid),
     getTranslations(),
   ]);
+
+  const MEAL_ORDER = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
+
+  function groupByMeal(meals: DayMeal[]): Record<string, DayMeal[]> {
+    const g: Record<string, DayMeal[]> = {};
+    for (const m of meals) {
+      if (!g[m.meal]) g[m.meal] = [];
+      g[m.meal].push(m);
+    }
+    return g;
+  }
 
   const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
@@ -102,18 +116,50 @@ export default async function StatusPage() {
             <WeekScrollInit />
             <div className="week-scroll">
               <div className="week" id="week-grid">
-                {week.map((d) => (
-                  <div key={d.date} className={`day ${d.isToday ? 'today' : ''} ${d.done > 0 ? 'done' : ''}`}>
-                    <span className="dn">{t(`weekdays.${WEEKDAY_KEYS[d.weekday - 1]}`)}</span>
-                    <span className="dd">{d.date.slice(8)}</span>
-                    {d.scheduled.map((n) => (
-                      <span key={n} className="ds">
-                        {n}
-                      </span>
-                    ))}
-                    {d.inProgress > 0 && <span className="ds">{t('status.inProgress')}</span>}
-                  </div>
-                ))}
+                {week.map((d) => {
+                  const dayMeals = activePlan?.dayMeals.filter((m) => m.weekday === d.weekday) ?? [];
+                  const grouped = groupByMeal(dayMeals);
+                  const totalKcal = dayMeals.reduce((a, m) => a + m.kcal, 0);
+                  const totalProtein = dayMeals.reduce((a, m) => a + m.protein, 0);
+                  const hasPrep = activePlan?.prepSessions.some((s) => s.cookWeekday === d.weekday);
+
+                  return (
+                    <div key={d.date} className={`day ${d.isToday ? 'today' : ''} ${d.done > 0 ? 'done' : ''}`}>
+                      <div className="day-head">
+                        <span className="dn">{t(`weekdays.${WEEKDAY_KEYS[d.weekday - 1]}`)}</span>
+                        <span className="dd">{d.date.slice(8)}</span>
+                        {hasPrep && <span style={{ fontSize: '0.62rem', color: 'var(--violet-2)', marginLeft: 'auto' }}>🍳</span>}
+                      </div>
+                      {d.scheduled.map((n) => (
+                        <span key={n} className="ds">{n}</span>
+                      ))}
+                      {d.inProgress > 0 && <span className="ds">{t('status.inProgress')}</span>}
+
+                      {dayMeals.length > 0 && (
+                        <div className="day-meals">
+                          {MEAL_ORDER.map((meal) => {
+                            const items = grouped[meal];
+                            if (!items) return null;
+                            return (
+                              <div key={meal} className="day-meal-group">
+                                <div className="dm-label">{t(`food.${meal}`)}</div>
+                                {items.map((m) => (
+                                  <div key={m.id} className={`day-meal-item${m.prepSessionId ? ' prep' : ''}`}>
+                                    {m.foodName}
+                                    {m.servings !== 1 && <span className="dm-srv"> ×{m.servings}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })}
+                          <div className="day-kcal">
+                            {Math.round(totalKcal)} kcal · {Math.round(totalProtein)}g P
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </Panel>

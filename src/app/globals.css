@@ -249,14 +249,21 @@ details.fold[open] > summary { margin-bottom: 10px; }
 .check svg { width: 14px; height: 14px; }
 
 .week-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
-.week { display: grid; grid-template-columns: repeat(7, minmax(64px, 1fr)); gap: 6px; min-width: 448px; }
-.day { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 4px; text-align: center; background: var(--panel-2); min-height: 74px; display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.week { display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: 6px; min-width: 1050px; }
+.day { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 10px 8px; background: var(--panel-2); min-height: 80px; display: flex; flex-direction: column; gap: 0; align-items: flex-start; }
+.day-head { display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px; width: 100%; }
 .day .dn { font-size: 0.64rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
 .day .dd { font-family: var(--mono), monospace; font-size: 0.9rem; }
-.day .ds { font-size: 0.6rem; color: var(--violet-3); line-height: 1.15; }
+.day .ds { font-size: 0.68rem; color: var(--violet-3); line-height: 1.2; margin-bottom: 4px; }
 .day.today { border-color: var(--violet); box-shadow: inset 0 0 14px rgba(139, 92, 246, 0.25); }
 .day.done { background: rgba(139, 92, 246, 0.2); border-color: #8b5cf6; }
 .day.done .dd::after { content: ' ✓'; color: var(--violet-3); }
+.day-meals { width: 100%; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 5px; }
+.day-meal-group .dm-label { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); margin-bottom: 2px; }
+.day-meal-item { font-size: 0.74rem; padding-left: 6px; border-left: 2px solid var(--line-strong); line-height: 1.2; margin-bottom: 2px; color: var(--text); }
+.day-meal-item.prep { border-left-color: var(--violet); color: var(--violet-3); }
+.day-meal-item .dm-srv { color: var(--dim); font-size: 0.66rem; }
+.day-kcal { font-size: 0.65rem; color: var(--muted); margin-top: 6px; padding-top: 5px; border-top: 1px solid var(--line); font-family: var(--mono), monospace; }
 
 .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-top: 12px; }
 .stats-grid .stat-row { margin: 0; }

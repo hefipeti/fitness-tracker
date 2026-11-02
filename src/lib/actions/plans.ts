@@ -20,7 +20,7 @@ export async function createPlanAction(fd: FormData): Promise<void> {
   const name = reqStr(fd, 'name', 80);
   const row = await q1<{ id: number }>(
     `INSERT INTO plans (user_id, name, notes, active)
-     VALUES ($1, $2, $3, NOT EXISTS (SELECT 1 FROM plans WHERE user_id = $1 AND active)) RETURNING id`,
+     VALUES ($1, $2, $3, NOT EXISTS (SELECT 1 FROM plans WHERE user_id = $1 AND active AND deleted_at IS NULL)) RETURNING id`,
     [uid, name, fdStr(fd, 'notes').slice(0, 500)],
   );
   touch();
@@ -33,7 +33,7 @@ export async function importTemplateAction(fd: FormData): Promise<void> {
   const tpl = getTemplate(fdStr(fd, 'template'));
   if (!tpl) throw new Error('Unknown plan template');
   const id = await tx(async (c) => {
-    const hasActive = !!(await q1('SELECT 1 FROM plans WHERE user_id = $1 AND active', [uid], c));
+    const hasActive = !!(await q1('SELECT 1 FROM plans WHERE user_id = $1 AND active AND deleted_at IS NULL', [uid], c));
     return importTemplate(c, uid, tpl, !hasActive);
   });
   touch();
@@ -68,7 +68,7 @@ export async function duplicatePlanAction(fd: FormData): Promise<void> {
       c,
     );
     const days = await q<{ id: number; position: number; name: string; weekday: number | null }>(
-      'SELECT id, position, name, weekday FROM plan_days WHERE plan_id = $1 ORDER BY position, id',
+      'SELECT id, position, name, weekday FROM plan_days WHERE plan_id = $1 AND deleted_at IS NULL ORDER BY position, id',
       [id],
       c,
     );
@@ -81,7 +81,7 @@ export async function duplicatePlanAction(fd: FormData): Promise<void> {
       await q(
         `INSERT INTO plan_exercises (plan_day_id, exercise_id, position, target_sets, target_reps, target_weight, note)
          SELECT $1, exercise_id, position, target_sets, target_reps, target_weight, note
-         FROM plan_exercises WHERE plan_day_id = $2`,
+         FROM plan_exercises WHERE plan_day_id = $2 AND deleted_at IS NULL`,
         [nd!.id, d.id],
         c,
       );
@@ -97,7 +97,7 @@ export async function setActivePlanAction(fd: FormData): Promise<void> {
   const id = reqInt(fd, 'id');
   await tx(async (c) => {
     await assertPlan(uid, id, c);
-    await q('UPDATE plans SET active = FALSE WHERE user_id = $1 AND active', [uid], c);
+    await q('UPDATE plans SET active = FALSE WHERE user_id = $1 AND active AND deleted_at IS NULL', [uid], c);
     await q('UPDATE plans SET active = TRUE WHERE id = $1 AND user_id = $2', [id, uid], c);
   });
   touch();
@@ -105,7 +105,16 @@ export async function setActivePlanAction(fd: FormData): Promise<void> {
 
 export async function deletePlanAction(fd: FormData): Promise<void> {
   const uid = await requireUserId();
-  await q('DELETE FROM plans WHERE id = $1 AND user_id = $2', [reqInt(fd, 'id'), uid]);
+  const id = reqInt(fd, 'id');
+  await tx(async (c) => {
+    await q(
+      `UPDATE plan_exercises SET deleted_at = now()
+       WHERE deleted_at IS NULL AND plan_day_id IN (SELECT id FROM plan_days WHERE plan_id = $1)`,
+      [id], c,
+    );
+    await q('UPDATE plan_days SET deleted_at = now() WHERE plan_id = $1 AND deleted_at IS NULL', [id], c);
+    await q('UPDATE plans SET deleted_at = now(), active = FALSE WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, uid], c);
+  });
   touch();
   redirect('/plans');
 }
@@ -136,7 +145,10 @@ export async function deleteDayAction(fd: FormData): Promise<void> {
   const uid = await requireUserId();
   const id = reqInt(fd, 'id');
   await assertPlanDay(uid, id);
-  await q('DELETE FROM plan_days WHERE id = $1', [id]);
+  await tx(async (c) => {
+    await q('UPDATE plan_exercises SET deleted_at = now() WHERE plan_day_id = $1 AND deleted_at IS NULL', [id], c);
+    await q('UPDATE plan_days SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL', [id], c);
+  });
   touch();
 }
 
@@ -181,7 +193,7 @@ export async function deletePlanExerciseAction(fd: FormData): Promise<void> {
   const uid = await requireUserId();
   const id = reqInt(fd, 'id');
   await assertPlanExercise(uid, id);
-  await q('DELETE FROM plan_exercises WHERE id = $1', [id]);
+  await q('UPDATE plan_exercises SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL', [id]);
   touch();
 }
 
@@ -194,7 +206,7 @@ export async function movePlanExerciseAction(fd: FormData): Promise<void> {
     const cur = await q1<{ plan_day_id: number }>('SELECT plan_day_id FROM plan_exercises WHERE id = $1', [id], c);
     if (!cur) return;
     const rows = await q<{ id: number }>(
-      'SELECT id FROM plan_exercises WHERE plan_day_id = $1 ORDER BY position, id FOR UPDATE',
+      'SELECT id FROM plan_exercises WHERE plan_day_id = $1 AND deleted_at IS NULL ORDER BY position, id FOR UPDATE',
       [cur.plan_day_id],
       c,
     );

@@ -160,8 +160,8 @@ export interface PlanSummary {
 export function listPlans(uid: number): Promise<PlanSummary[]> {
   return q<PlanSummary>(
     `SELECT p.id, p.name, p.notes, p.active, p.created_at AS "createdAt",
-            (SELECT count(*) FROM plan_days d WHERE d.plan_id = p.id)::int AS "dayCount"
-     FROM plans p WHERE p.user_id = $1 ORDER BY p.active DESC, p.created_at DESC, p.id DESC`,
+            (SELECT count(*) FROM plan_days d WHERE d.plan_id = p.id AND d.deleted_at IS NULL)::int AS "dayCount"
+     FROM plans p WHERE p.user_id = $1 AND p.deleted_at IS NULL ORDER BY p.active DESC, p.created_at DESC, p.id DESC`,
     [uid],
   );
 }
@@ -171,7 +171,7 @@ type PlanHead = Omit<PlanFull, 'days'>;
 async function loadPlan(plan: PlanHead): Promise<PlanFull> {
   const days = await q<Omit<PlanDayRow, 'exercises'>>(
     `SELECT id, plan_id AS "planId", position, name, weekday FROM plan_days
-     WHERE plan_id = $1 ORDER BY weekday NULLS LAST, position, id`,
+     WHERE plan_id = $1 AND deleted_at IS NULL ORDER BY weekday NULLS LAST, position, id`,
     [plan.id],
   );
   const exs = await q<PlanExerciseRow & { planDayId: number }>(
@@ -181,7 +181,7 @@ async function loadPlan(plan: PlanHead): Promise<PlanFull> {
      FROM plan_exercises pe
      JOIN exercises ex ON ex.id = pe.exercise_id
      JOIN plan_days d ON d.id = pe.plan_day_id
-     WHERE d.plan_id = $1 ORDER BY pe.position, pe.id`,
+     WHERE d.plan_id = $1 AND pe.deleted_at IS NULL AND d.deleted_at IS NULL ORDER BY pe.position, pe.id`,
     [plan.id],
   );
   return {
@@ -191,12 +191,12 @@ async function loadPlan(plan: PlanHead): Promise<PlanFull> {
 }
 
 export async function getPlan(uid: number, id: number): Promise<PlanFull | null> {
-  const p = await q1<PlanHead>('SELECT id, name, notes, active, guide FROM plans WHERE id = $1 AND user_id = $2', [id, uid]);
+  const p = await q1<PlanHead>('SELECT id, name, notes, active, guide FROM plans WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, uid]);
   return p ? loadPlan(p) : null;
 }
 
 export async function getActivePlan(uid: number): Promise<PlanFull | null> {
-  const p = await q1<PlanHead>('SELECT id, name, notes, active, guide FROM plans WHERE user_id = $1 AND active', [uid]);
+  const p = await q1<PlanHead>('SELECT id, name, notes, active, guide FROM plans WHERE user_id = $1 AND active AND deleted_at IS NULL', [uid]);
   return p ? loadPlan(p) : null;
 }
 
@@ -217,16 +217,16 @@ export interface SessionRow {
 const SESSION_SELECT = `
   SELECT se.id, se.session_date AS date, se.name, se.plan_day_id AS "planDayId",
          se.started_at AS "startedAt", se.completed_at AS "completedAt", se.note,
-         (SELECT count(*) FROM session_sets s WHERE s.session_id = se.id)::int AS "setCount",
+         (SELECT count(*) FROM session_sets s WHERE s.session_id = se.id AND s.deleted_at IS NULL)::int AS "setCount",
          COALESCE((SELECT sum(xp) FROM xp_events WHERE user_id = se.user_id AND source = 'workout' AND ref = 'session:' || se.id), 0)::int AS xp
   FROM sessions se`;
 
 export function listSessions(uid: number, limit = 30): Promise<SessionRow[]> {
-  return q<SessionRow>(`${SESSION_SELECT} WHERE se.user_id = $1 ORDER BY se.session_date DESC, se.id DESC LIMIT $2`, [uid, limit]);
+  return q<SessionRow>(`${SESSION_SELECT} WHERE se.user_id = $1 AND se.deleted_at IS NULL ORDER BY se.session_date DESC, se.id DESC LIMIT $2`, [uid, limit]);
 }
 
 export function listSessionsOn(uid: number, date: string): Promise<SessionRow[]> {
-  return q<SessionRow>(`${SESSION_SELECT} WHERE se.user_id = $1 AND se.session_date = $2 ORDER BY se.id`, [uid, date]);
+  return q<SessionRow>(`${SESSION_SELECT} WHERE se.user_id = $1 AND se.session_date = $2 AND se.deleted_at IS NULL ORDER BY se.id`, [uid, date]);
 }
 
 export interface LoggedSet {
@@ -258,19 +258,19 @@ export interface SessionDetail {
 }
 
 export async function getSessionDetail(uid: number, id: number): Promise<SessionDetail | null> {
-  const session = await q1<SessionRow>(`${SESSION_SELECT} WHERE se.id = $1 AND se.user_id = $2`, [id, uid]);
+  const session = await q1<SessionRow>(`${SESSION_SELECT} WHERE se.id = $1 AND se.user_id = $2 AND se.deleted_at IS NULL`, [id, uid]);
   if (!session) return null;
 
   const exs = await q<Omit<SessionExerciseDetail, 'sets' | 'last'>>(
     `SELECT sx.id, sx.exercise_id AS "exerciseId", ex.slug, ex.name, ex.description, ex.category, ex.mode, sx.position,
             sx.target_sets AS "targetSets", sx.target_reps AS "targetReps", sx.target_weight AS "targetWeight"
      FROM session_exercises sx JOIN exercises ex ON ex.id = sx.exercise_id
-     WHERE sx.session_id = $1 ORDER BY sx.position, sx.id`,
+     WHERE sx.session_id = $1 AND sx.deleted_at IS NULL ORDER BY sx.position, sx.id`,
     [id],
   );
   const sets = await q<LoggedSet & { exerciseId: number }>(
     `SELECT exercise_id AS "exerciseId", set_no AS "setNo", reps, seconds, weight_kg AS "weightKg"
-     FROM session_sets WHERE session_id = $1 ORDER BY set_no`,
+     FROM session_sets WHERE session_id = $1 AND deleted_at IS NULL ORDER BY set_no`,
     [id],
   );
   const ids = exs.map((e) => e.exerciseId);
@@ -279,11 +279,12 @@ export async function getSessionDetail(uid: number, id: number): Promise<Session
         `WITH prev AS (
            SELECT DISTINCT ON (s.exercise_id) s.exercise_id, s.session_id
            FROM session_sets s JOIN sessions se ON se.id = s.session_id
-           WHERE se.user_id = $3 AND se.completed_at IS NOT NULL AND se.id <> $2 AND s.exercise_id = ANY($1::int[])
+           WHERE se.user_id = $3 AND se.completed_at IS NOT NULL AND se.deleted_at IS NULL AND se.id <> $2 AND s.exercise_id = ANY($1::int[]) AND s.deleted_at IS NULL
            ORDER BY s.exercise_id, se.session_date DESC, se.id DESC
          )
          SELECT s.exercise_id AS "exerciseId", s.set_no AS "setNo", s.reps, s.seconds, s.weight_kg AS "weightKg"
          FROM session_sets s JOIN prev p ON p.exercise_id = s.exercise_id AND p.session_id = s.session_id
+         WHERE s.deleted_at IS NULL
          ORDER BY s.exercise_id, s.set_no`,
         [ids, id, uid],
       )
@@ -310,9 +311,9 @@ export interface ScheduledDay {
 
 export function getScheduledDays(uid: number, date: string): Promise<ScheduledDay[]> {
   return q<ScheduledDay>(
-    `SELECT d.id, d.name, d.weekday, (SELECT count(*) FROM plan_exercises e WHERE e.plan_day_id = d.id)::int AS "exerciseCount"
-     FROM plan_days d JOIN plans p ON p.id = d.plan_id AND p.active AND p.user_id = $1
-     WHERE d.weekday = $2 ORDER BY d.position, d.id`,
+    `SELECT d.id, d.name, d.weekday, (SELECT count(*) FROM plan_exercises e WHERE e.plan_day_id = d.id AND e.deleted_at IS NULL)::int AS "exerciseCount"
+     FROM plan_days d JOIN plans p ON p.id = d.plan_id AND p.active AND p.user_id = $1 AND p.deleted_at IS NULL
+     WHERE d.weekday = $2 AND d.deleted_at IS NULL ORDER BY d.position, d.id`,
     [uid, isoWeekday(date)],
   );
 }
@@ -320,9 +321,9 @@ export function getScheduledDays(uid: number, date: string): Promise<ScheduledDa
 export async function listActiveDays(uid: number): Promise<ScheduledDay[]> {
   return q<ScheduledDay>(
     `SELECT d.id, d.name, COALESCE(d.weekday, 0) AS weekday,
-            (SELECT count(*) FROM plan_exercises e WHERE e.plan_day_id = d.id)::int AS "exerciseCount"
-     FROM plan_days d JOIN plans p ON p.id = d.plan_id AND p.active AND p.user_id = $1
-     ORDER BY d.weekday NULLS LAST, d.position, d.id`,
+            (SELECT count(*) FROM plan_exercises e WHERE e.plan_day_id = d.id AND e.deleted_at IS NULL)::int AS "exerciseCount"
+     FROM plan_days d JOIN plans p ON p.id = d.plan_id AND p.active AND p.user_id = $1 AND p.deleted_at IS NULL
+     WHERE d.deleted_at IS NULL ORDER BY d.weekday NULLS LAST, d.position, d.id`,
     [uid],
   );
 }
@@ -343,7 +344,7 @@ export async function getWeek(uid: number, today: string): Promise<WeekCell[]> {
     listActiveDays(uid),
     q<{ date: string; completed: boolean }>(
       `SELECT session_date AS date, completed_at IS NOT NULL AS completed FROM sessions
-       WHERE user_id = $1 AND session_date BETWEEN $2 AND $3`,
+       WHERE user_id = $1 AND session_date BETWEEN $2 AND $3 AND deleted_at IS NULL`,
       [uid, monday, sunday],
     ),
   ]);
@@ -375,15 +376,15 @@ export interface Task {
 const TASK_SELECT = `SELECT id, title, due_date AS "dueDate", repeat, xp, done_at AS "doneAt" FROM tasks`;
 
 export function listOpenTasks(uid: number): Promise<Task[]> {
-  return q<Task>(`${TASK_SELECT} WHERE user_id = $1 AND done_at IS NULL ORDER BY due_date NULLS LAST, id`, [uid]);
+  return q<Task>(`${TASK_SELECT} WHERE user_id = $1 AND done_at IS NULL AND deleted_at IS NULL ORDER BY due_date NULLS LAST, id`, [uid]);
 }
 
 export function listDoneTasks(uid: number, limit = 20): Promise<Task[]> {
-  return q<Task>(`${TASK_SELECT} WHERE user_id = $1 AND done_at IS NOT NULL ORDER BY done_at DESC LIMIT $2`, [uid, limit]);
+  return q<Task>(`${TASK_SELECT} WHERE user_id = $1 AND done_at IS NOT NULL AND deleted_at IS NULL ORDER BY done_at DESC LIMIT $2`, [uid, limit]);
 }
 
 export function listTasksDueBy(uid: number, date: string): Promise<Task[]> {
-  return q<Task>(`${TASK_SELECT} WHERE user_id = $1 AND done_at IS NULL AND due_date <= $2 ORDER BY due_date, id`, [uid, date]);
+  return q<Task>(`${TASK_SELECT} WHERE user_id = $1 AND done_at IS NULL AND deleted_at IS NULL AND due_date <= $2 ORDER BY due_date, id`, [uid, date]);
 }
 
 // ---------- Food ----------
@@ -428,7 +429,7 @@ export interface FoodDay {
 export async function getFoodDay(uid: number, date: string): Promise<FoodDay> {
   const logs = await q<FoodLog>(
     `SELECT id, meal, food_id AS "foodId", name, servings, kcal, protein, carbs, fat
-     FROM food_logs WHERE user_id = $1 AND log_date = $2 ORDER BY id`,
+     FROM food_logs WHERE user_id = $1 AND log_date = $2 AND deleted_at IS NULL ORDER BY id`,
     [uid, date],
   );
   const totals = logs.reduce(
@@ -446,7 +447,7 @@ export interface WeightRow {
 }
 
 export function listWeights(uid: number, limit = 30): Promise<WeightRow[]> {
-  return q<WeightRow>(`SELECT log_date AS date, kg FROM body_weights WHERE user_id = $1 ORDER BY log_date DESC LIMIT $2`, [uid, limit]);
+  return q<WeightRow>(`SELECT log_date AS date, kg FROM body_weights WHERE user_id = $1 AND deleted_at IS NULL ORDER BY log_date DESC LIMIT $2`, [uid, limit]);
 }
 
 // ---------- Progress series ----------
@@ -486,14 +487,14 @@ export async function getVolumeSeries(uid: number, since: string, by: GroupBy): 
     q<{ period: string; category: Category; sets: number }>(
       `SELECT date_trunc('${trunc}', se.session_date)::date AS period, ex.category, count(*)::int AS sets
        FROM session_sets s
-       JOIN sessions se ON se.id = s.session_id AND se.completed_at IS NOT NULL
+       JOIN sessions se ON se.id = s.session_id AND se.completed_at IS NOT NULL AND se.deleted_at IS NULL
        JOIN exercises ex ON ex.id = s.exercise_id
-       WHERE se.user_id = $1 AND se.session_date >= $2 GROUP BY 1, 2 ORDER BY 1`,
+       WHERE se.user_id = $1 AND se.session_date >= $2 AND s.deleted_at IS NULL GROUP BY 1, 2 ORDER BY 1`,
       [uid, since],
     ),
     q<{ period: string; sessions: number }>(
       `SELECT date_trunc('${trunc}', session_date)::date AS period, count(*)::int AS sessions
-       FROM sessions WHERE user_id = $1 AND completed_at IS NOT NULL AND session_date >= $2 GROUP BY 1 ORDER BY 1`,
+       FROM sessions WHERE user_id = $1 AND completed_at IS NOT NULL AND deleted_at IS NULL AND session_date >= $2 GROUP BY 1 ORDER BY 1`,
       [uid, since],
     ),
   ]);
@@ -530,13 +531,21 @@ export async function getExerciseProgress(
       : mode === 'weighted'
         ? 'max(s.weight_kg * (1 + s.reps / 30.0))'
         : mode === 'assisted'
-          ? 'min(s.weight_kg) FILTER (WHERE s.reps >= 5)'
+          ? 'min(s.weight_kg)'
           : 'max(s.reps)';
+  const modeFilter =
+    mode === 'seconds'
+      ? 'AND s.seconds IS NOT NULL'
+      : mode === 'weighted'
+        ? 'AND s.weight_kg IS NOT NULL'
+        : mode === 'assisted'
+          ? 'AND s.reps >= 5 AND s.weight_kg IS NOT NULL'
+          : 'AND s.reps IS NOT NULL';
   return q<ExerciseProgressRow>(
     `SELECT date_trunc('${TRUNC[by]}', se.session_date)::date AS period, round(${metric}::numeric, 1) AS value
-     FROM session_sets s JOIN sessions se ON se.id = s.session_id AND se.completed_at IS NOT NULL
-     WHERE se.user_id = $1 AND s.exercise_id = $2 AND se.session_date >= $3
-     GROUP BY 1 HAVING ${metric} IS NOT NULL ORDER BY 1`,
+     FROM session_sets s JOIN sessions se ON se.id = s.session_id AND se.completed_at IS NOT NULL AND se.deleted_at IS NULL
+     WHERE se.user_id = $1 AND s.exercise_id = $2 AND se.session_date >= $3 AND s.deleted_at IS NULL ${modeFilter}
+     GROUP BY 1 ORDER BY 1`,
     [uid, exerciseId, since],
   );
 }
@@ -545,9 +554,9 @@ export function listLoggedExercises(uid: number): Promise<(Exercise & { sets: nu
   return q(
     `SELECT ex.id, ex.slug, ex.name, ex.category, ex.mode, ex.archived, (ex.user_id IS NOT NULL) AS custom, count(s.id)::int AS sets
      FROM exercises ex
-     JOIN session_sets s ON s.exercise_id = ex.id
-     JOIN sessions se ON se.id = s.session_id AND se.completed_at IS NOT NULL AND se.user_id = $1
-     GROUP BY ex.id ORDER BY sets DESC, ex.name`,
+     JOIN session_sets s ON s.exercise_id = ex.id AND s.deleted_at IS NULL
+     JOIN sessions se ON se.id = s.session_id AND se.completed_at IS NOT NULL AND se.user_id = $1 AND se.deleted_at IS NULL
+     GROUP BY ex.id, ex.slug, ex.name, ex.category, ex.mode, ex.archived, ex.user_id ORDER BY sets DESC, ex.name`,
     [uid],
   );
 }
@@ -555,7 +564,7 @@ export function listLoggedExercises(uid: number): Promise<(Exercise & { sets: nu
 export function getWeightSeries(uid: number, since: string, by: GroupBy): Promise<{ period: string; kg: number }[]> {
   return q(
     `SELECT date_trunc('${TRUNC[by]}', log_date)::date AS period, round(avg(kg), 1) AS kg
-     FROM body_weights WHERE user_id = $1 AND log_date >= $2 GROUP BY 1 ORDER BY 1`,
+     FROM body_weights WHERE user_id = $1 AND log_date >= $2 AND deleted_at IS NULL GROUP BY 1 ORDER BY 1`,
     [uid, since],
   );
 }
@@ -568,7 +577,7 @@ export function getNutritionSeries(
   return q(
     `SELECT date_trunc('${TRUNC[by]}', d)::date AS period, round(avg(kcal)) AS kcal, round(avg(protein)) AS protein
      FROM (SELECT log_date AS d, sum(kcal) AS kcal, sum(protein) AS protein FROM food_logs
-           WHERE user_id = $1 AND log_date >= $2 GROUP BY log_date) t
+           WHERE user_id = $1 AND log_date >= $2 AND deleted_at IS NULL GROUP BY log_date) t
      GROUP BY 1 ORDER BY 1`,
     [uid, since],
   );
@@ -604,7 +613,7 @@ export async function lookupShare(token: string): Promise<ShareLookup | null> {
   const row = await q1<{ shareId: number; planId: number; userId: number; includePersonal: boolean; shareType: string }>(
     `SELECT id AS "shareId", plan_id AS "planId", user_id AS "userId",
             include_personal AS "includePersonal", share_type AS "shareType"
-     FROM plan_shares WHERE token_hash = $1`,
+     FROM plan_shares WHERE token_hash = $1 AND deleted_at IS NULL`,
     [hashToken(token)],
   );
   if (!row) return null;
@@ -621,7 +630,7 @@ export function listSharesForPlan(userId: number, planId: number): Promise<Share
   return q<ShareRow>(
     `SELECT id, plan_id AS "planId", share_type AS "shareType",
             include_personal AS "includePersonalData", created_at AS "createdAt"
-     FROM plan_shares WHERE user_id = $1 AND plan_id = $2 ORDER BY created_at DESC`,
+     FROM plan_shares WHERE user_id = $1 AND plan_id = $2 AND deleted_at IS NULL ORDER BY created_at DESC`,
     [userId, planId],
   );
 }
@@ -657,7 +666,7 @@ export async function getLastAttemptsForPlan(uid: number, planId: number): Promi
   const exerciseIds = (
     await q<{ id: number }>(
       `SELECT DISTINCT pe.exercise_id AS id FROM plan_exercises pe
-       JOIN plan_days pd ON pd.id = pe.plan_day_id WHERE pd.plan_id = $1`,
+       JOIN plan_days pd ON pd.id = pe.plan_day_id WHERE pd.plan_id = $1 AND pe.deleted_at IS NULL AND pd.deleted_at IS NULL`,
       [planId],
     )
   ).map((r) => r.id);
@@ -667,8 +676,8 @@ export async function getLastAttemptsForPlan(uid: number, planId: number): Promi
        SELECT DISTINCT ON (ss.exercise_id)
          ss.exercise_id, ss.session_id, se.session_date
        FROM session_sets ss
-       JOIN sessions se ON se.id = ss.session_id AND se.completed_at IS NOT NULL AND se.user_id = $1
-       WHERE ss.exercise_id = ANY($2::int[])
+       JOIN sessions se ON se.id = ss.session_id AND se.completed_at IS NOT NULL AND se.user_id = $1 AND se.deleted_at IS NULL
+       WHERE ss.exercise_id = ANY($2::int[]) AND ss.deleted_at IS NULL
        ORDER BY ss.exercise_id, se.session_date DESC, se.id DESC
      )
      SELECT ls.exercise_id AS "exerciseId", ls.session_date AS "lastDate",
@@ -677,7 +686,7 @@ export async function getLastAttemptsForPlan(uid: number, planId: number): Promi
             max(ss.seconds) AS "lastSeconds",
             max(ss.weight_kg) AS "lastWeightKg"
      FROM last_sessions ls
-     JOIN session_sets ss ON ss.session_id = ls.session_id AND ss.exercise_id = ls.exercise_id
+     JOIN session_sets ss ON ss.session_id = ls.session_id AND ss.exercise_id = ls.exercise_id AND ss.deleted_at IS NULL
      GROUP BY ls.exercise_id, ls.session_date`,
     [uid, exerciseIds],
   );
@@ -700,12 +709,12 @@ export async function getExerciseTrendsForPlan(uid: number, planId: number, sinc
               ELSE max(ss.reps)
             END::numeric, 1) AS value
      FROM (SELECT DISTINCT pe.exercise_id
-           FROM plan_exercises pe JOIN plan_days pd ON pd.id = pe.plan_day_id WHERE pd.plan_id = $2) s
-     JOIN session_sets ss ON ss.exercise_id = s.exercise_id
+           FROM plan_exercises pe JOIN plan_days pd ON pd.id = pe.plan_day_id WHERE pd.plan_id = $2 AND pe.deleted_at IS NULL AND pd.deleted_at IS NULL) s
+     JOIN session_sets ss ON ss.exercise_id = s.exercise_id AND ss.deleted_at IS NULL
      JOIN sessions se ON se.id = ss.session_id AND se.completed_at IS NOT NULL
-                     AND se.user_id = $1 AND se.session_date >= $3
+                     AND se.user_id = $1 AND se.session_date >= $3 AND se.deleted_at IS NULL
      JOIN exercises ex ON ex.id = s.exercise_id
-     GROUP BY s.exercise_id, period
+     GROUP BY s.exercise_id, period, ex.mode
      HAVING CASE ex.mode
        WHEN 'weighted' THEN max(ss.weight_kg * (1 + ss.reps / 30.0))
        WHEN 'assisted' THEN min(ss.weight_kg) FILTER (WHERE ss.reps >= 5)
@@ -812,14 +821,14 @@ export interface NutritionPlanFull extends NutritionPlanSummary {
 
 export function listNutritionPlans(uid: number): Promise<NutritionPlanSummary[]> {
   return q<NutritionPlanSummary>(
-    `SELECT id, name, active, created_at AS "createdAt" FROM nutrition_plans WHERE user_id = $1 ORDER BY created_at`,
+    `SELECT id, name, active, created_at AS "createdAt" FROM nutrition_plans WHERE user_id = $1 AND deleted_at IS NULL ORDER BY created_at`,
     [uid],
   );
 }
 
 export async function getNutritionPlan(uid: number, planId: number): Promise<NutritionPlanFull | null> {
   const plan = await q1<NutritionPlanSummary>(
-    `SELECT id, name, active, created_at AS "createdAt" FROM nutrition_plans WHERE id = $1 AND user_id = $2`,
+    `SELECT id, name, active, created_at AS "createdAt" FROM nutrition_plans WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
     [planId, uid],
   );
   if (!plan) return null;
@@ -827,7 +836,7 @@ export async function getNutritionPlan(uid: number, planId: number): Promise<Nut
   const [sessions, prepFoodsRaw, dayMeals] = await Promise.all([
     q<Omit<PrepSession, 'foods'>>(
       `SELECT id, name, cook_weekday AS "cookWeekday", notes
-       FROM nutrition_plan_prep_sessions WHERE plan_id = $1 ORDER BY id`,
+       FROM nutrition_plan_prep_sessions WHERE plan_id = $1 AND deleted_at IS NULL ORDER BY id`,
       [planId],
     ),
     q<PrepFood & { prepSessionId: number }>(
@@ -838,7 +847,7 @@ export async function getNutritionPlan(uid: number, planId: number): Promise<Nut
        FROM nutrition_plan_prep_foods pf
        JOIN foods f ON f.id = pf.food_id
        JOIN nutrition_plan_prep_sessions s ON s.id = pf.prep_session_id
-       WHERE s.plan_id = $1 ORDER BY pf.id`,
+       WHERE s.plan_id = $1 AND pf.deleted_at IS NULL AND s.deleted_at IS NULL ORDER BY pf.id`,
       [planId],
     ),
     q<DayMeal>(
@@ -851,7 +860,7 @@ export async function getNutritionPlan(uid: number, planId: number): Promise<Nut
               round((f.fat * dm.servings)::numeric, 1)::float AS fat
        FROM nutrition_plan_day_meals dm
        JOIN foods f ON f.id = dm.food_id
-       WHERE dm.plan_id = $1 ORDER BY dm.weekday, dm.meal`,
+       WHERE dm.plan_id = $1 AND dm.deleted_at IS NULL ORDER BY dm.weekday, dm.meal`,
       [planId],
     ),
   ]);
@@ -870,7 +879,7 @@ export async function getNutritionPlan(uid: number, planId: number): Promise<Nut
 }
 
 export async function getActiveNutritionPlan(uid: number): Promise<NutritionPlanFull | null> {
-  const row = await q1<{ id: number }>('SELECT id FROM nutrition_plans WHERE user_id = $1 AND active = TRUE', [uid]);
+  const row = await q1<{ id: number }>('SELECT id FROM nutrition_plans WHERE user_id = $1 AND active = TRUE AND deleted_at IS NULL', [uid]);
   if (!row) return null;
   return getNutritionPlan(uid, row.id);
 }

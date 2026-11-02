@@ -25,7 +25,7 @@ export async function createShare(
 }
 
 export async function revokeShare(userId: number, shareId: number): Promise<void> {
-  await q(`DELETE FROM plan_shares WHERE id = $1 AND user_id = $2`, [shareId, userId]);
+  await q(`UPDATE plan_shares SET deleted_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`, [shareId, userId]);
 }
 
 export async function addComment(
