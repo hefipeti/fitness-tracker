@@ -412,6 +412,13 @@ const MIGRATIONS: Migration[] = [
     },
   },
   {
+    id: 16,
+    name: 'session exercises note',
+    up: async (c) => {
+      await c.query(`ALTER TABLE session_exercises ADD COLUMN note TEXT NOT NULL DEFAULT ''`);
+    },
+  },
+  {
     id: 14,
     name: 'nutrition plan shopping list',
     up: async (c) => {

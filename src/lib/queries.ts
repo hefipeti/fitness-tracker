@@ -248,6 +248,7 @@ export interface SessionExerciseDetail {
   targetSets: number;
   targetReps: number;
   targetWeight: number | null;
+  note: string;
   sets: LoggedSet[];
   last: SetLike[];
 }
@@ -263,7 +264,7 @@ export async function getSessionDetail(uid: number, id: number): Promise<Session
 
   const exs = await q<Omit<SessionExerciseDetail, 'sets' | 'last'>>(
     `SELECT sx.id, sx.exercise_id AS "exerciseId", ex.slug, ex.name, ex.description, ex.category, ex.mode, sx.position,
-            sx.target_sets AS "targetSets", sx.target_reps AS "targetReps", sx.target_weight AS "targetWeight"
+            sx.target_sets AS "targetSets", sx.target_reps AS "targetReps", sx.target_weight AS "targetWeight", sx.note
      FROM session_exercises sx JOIN exercises ex ON ex.id = sx.exercise_id
      WHERE sx.session_id = $1 AND sx.deleted_at IS NULL ORDER BY sx.position, sx.id`,
     [id],

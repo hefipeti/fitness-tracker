@@ -195,6 +195,9 @@ export function SessionLogger({
               {ex.description && (
                 <p className="tiny dim" style={{ marginBottom: 6, marginTop: 2 }}>{ex.description}</p>
               )}
+              {ex.note && (
+                <p className="tiny dim" style={{ marginBottom: 6, marginTop: 2 }}>{ex.note}</p>
+              )}
               {ex.last.length > 0 && (
                 <div className="tiny dim mono" style={{ marginBottom: 8 }}>
                   LAST: {ex.last.map((s) => fmtLast(ex.mode, s)).join(' · ')}

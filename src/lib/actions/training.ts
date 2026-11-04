@@ -39,8 +39,8 @@ export async function startSessionAction(fd: FormData): Promise<void> {
         c,
       );
       await q(
-        `INSERT INTO session_exercises (session_id, exercise_id, position, target_sets, target_reps, target_weight)
-         SELECT $1, exercise_id, position, target_sets, target_reps, target_weight
+        `INSERT INTO session_exercises (session_id, exercise_id, position, target_sets, target_reps, target_weight, note)
+         SELECT $1, exercise_id, position, target_sets, target_reps, target_weight, note
          FROM plan_exercises WHERE plan_day_id = $2 ORDER BY position, id`,
         [s!.id, planDayId],
         c,
